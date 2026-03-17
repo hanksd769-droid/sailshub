@@ -1,0 +1,82 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  background: #f5f6fa;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.auth-container {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #e8f1ff, #f5f6fa 45%, #ffffff 80%);
+}
+
+.auth-card {
+  width: 420px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.module-card {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.module-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.result-panel {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.stream-box {
+  background: #0b1020;
+  color: #e7f0ff;
+  padding: 12px;
+  border-radius: 8px;
+  height: 220px;
+  overflow: auto;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.form-section {
+  margin-bottom: 24px;
+}
+
+.tag-muted {
+  color: #6b7280;
+}
