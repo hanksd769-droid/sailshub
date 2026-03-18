@@ -1,5 +1,7 @@
-import { Pool } from 'pg';
+import pkg from 'pg';
 import { config } from './config';
+
+const { Pool } = pkg;
 
 export const pool = new Pool({
   connectionString: config.databaseUrl,
