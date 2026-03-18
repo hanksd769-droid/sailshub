@@ -6,6 +6,15 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import DetailImagePage from './pages/DetailImagePage';
 import VideoCopyPage from './pages/VideoCopyPage';
+import { getToken } from './lib/api';
+
+const RequireAuth = ({ children }: { children: JSX.Element }) => {
+  const token = getToken();
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
 
 const App = () => {
   return (
@@ -14,7 +23,13 @@ const App = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Route>
-      <Route element={<MainLayout />}>
+      <Route
+        element={
+          <RequireAuth>
+            <MainLayout />
+          </RequireAuth>
+        }
+      >
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/modules/detail-image" element={<DetailImagePage />} />

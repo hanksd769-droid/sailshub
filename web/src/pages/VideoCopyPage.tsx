@@ -1,10 +1,64 @@
-import { Button, Card, Form, Space, Typography, Upload } from 'antd';
+import { Button, Card, Form, Space, Typography, Upload, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import ResultPanel from '../components/ResultPanel';
+import { runWorkflowStream, uploadFile } from '../lib/api';
 
 const VideoCopyPage = () => {
   const [streamText, setStreamText] = useState('');
+  const [jsonText, setJsonText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [form] = Form.useForm();
+
+  const handleSubmit = async () => {
+    const values = await form.validateFields();
+    if (!values.input?.fileList?.length) {
+      message.error('请上传视频');
+      return;
+    }
+
+    setStreamText('');
+    setJsonText('');
+    setLoading(true);
+
+    try {
+      const fileItem = values.input.fileList[0];
+      if (!fileItem.originFileObj) {
+        message.error('上传文件无效');
+        setLoading(false);
+        return;
+      }
+
+      const uploadResponse = await uploadFile(fileItem.originFileObj as File);
+      const fileId = uploadResponse?.data?.file_id ?? uploadResponse?.file_id;
+
+      if (!fileId) {
+        throw new Error('文件上传失败');
+      }
+
+      await runWorkflowStream(
+        'video-copy',
+        { input: fileId },
+        (data) => {
+          setJsonText((prev) => `${prev}\n${JSON.stringify(data, null, 2)}`);
+          if (typeof data === 'string') {
+            setStreamText((prev) => `${prev}${data}`);
+          }
+        },
+        () => {
+          setLoading(false);
+          message.success('提取完成');
+        },
+        (err) => {
+          setLoading(false);
+          message.error(err || '提取失败');
+        }
+      );
+    } catch (error) {
+      setLoading(false);
+      message.error(error instanceof Error ? error.message : '提取失败');
+    }
+  };
 
   return (
     <div>
@@ -20,21 +74,23 @@ const VideoCopyPage = () => {
       </div>
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <Card className="form-section">
-          <Form layout="vertical">
+          <Form layout="vertical" form={form}>
             <Form.Item label="上传视频" name="input">
-              <Upload multiple>
+              <Upload maxCount={1} beforeUpload={() => false}>
                 <Button icon={<UploadOutlined />}>选择视频文件</Button>
               </Upload>
             </Form.Item>
-            <Button type="primary">开始提取</Button>
+            <Button type="primary" loading={loading} onClick={handleSubmit}>
+              开始提取
+            </Button>
           </Form>
         </Card>
         <ResultPanel
           title="提取结果"
           streamText={streamText}
-          jsonText={streamText}
+          jsonText={jsonText}
           onCopyText={() => navigator.clipboard.writeText(streamText)}
-          onCopyJson={() => navigator.clipboard.writeText(streamText)}
+          onCopyJson={() => navigator.clipboard.writeText(jsonText)}
         />
       </Space>
     </div>

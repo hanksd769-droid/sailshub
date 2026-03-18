@@ -1,11 +1,15 @@
-import { Button, Card, Form, Input, Select, Space, Tabs, Typography, Upload } from 'antd';
+import { Button, Card, Form, Input, Select, Space, Tabs, Typography, Upload, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useMemo, useState } from 'react';
 import ResultPanel from '../components/ResultPanel';
+import { runWorkflowStream, uploadFile } from '../lib/api';
 
 const DetailImagePage = () => {
   const [branch, setBranch] = useState<'withRef' | 'noRef'>('withRef');
   const [streamText, setStreamText] = useState('');
+  const [jsonText, setJsonText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [form] = Form.useForm();
 
   const workflowOptions = useMemo(
     () => [
@@ -24,6 +28,74 @@ const DetailImagePage = () => {
   );
 
   const activeWorkflow = workflowOptions.find((item) => item.key === branch);
+
+  const handleSubmit = async () => {
+    const values = await form.validateFields();
+    setStreamText('');
+    setJsonText('');
+    setLoading(true);
+
+    try {
+      let mainImage = values.img1Url as string | undefined;
+      if (!mainImage && values.img1?.file) {
+        const uploadResponse = await uploadFile(values.img1.file as File);
+        mainImage = uploadResponse?.data?.file_id ?? uploadResponse?.file_id;
+      }
+
+      let refImages: string[] | undefined;
+      if (branch === 'withRef') {
+        refImages = [];
+        if (values.img2?.fileList?.length) {
+          for (const fileItem of values.img2.fileList) {
+            if (fileItem.originFileObj) {
+              const uploadResponse = await uploadFile(fileItem.originFileObj as File);
+              const fileId = uploadResponse?.data?.file_id ?? uploadResponse?.file_id;
+              if (fileId) {
+                refImages.push(fileId);
+              }
+            }
+          }
+        }
+        if (values.img2Urls) {
+          const urlList = values.img2Urls
+            .split('\n')
+            .map((item: string) => item.trim())
+            .filter(Boolean);
+          refImages.push(...urlList);
+        }
+      }
+
+      const parameters: Record<string, unknown> = {
+        img1: mainImage,
+        img2: refImages && refImages.length > 0 ? refImages : undefined,
+        maidian: values.maidian,
+        name: values.name,
+        aspectRatio: values.aspectRatio,
+      };
+
+      await runWorkflowStream(
+        branch === 'withRef' ? 'detail-image-with-ref' : 'detail-image-no-ref',
+        parameters,
+        (data) => {
+          setJsonText((prev) => `${prev}\n${JSON.stringify(data, null, 2)}`);
+          if (typeof data === 'string') {
+            setStreamText((prev) => `${prev}${data}`);
+          }
+        },
+        () => {
+          setLoading(false);
+          message.success('生成完成');
+        },
+        (err) => {
+          setLoading(false);
+          message.error(err || '生成失败');
+        }
+      );
+    } catch (error) {
+      setLoading(false);
+      message.error(error instanceof Error ? error.message : '生成失败');
+    }
+  };
 
   return (
     <div>
@@ -47,7 +119,7 @@ const DetailImagePage = () => {
       />
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <Card className="form-section">
-          <Form layout="vertical">
+          <Form layout="vertical" form={form}>
             <Form.Item label="Workflow ID">
               <Input value={activeWorkflow?.workflowId} disabled />
             </Form.Item>
@@ -61,22 +133,27 @@ const DetailImagePage = () => {
               />
             </Form.Item>
             <Form.Item label="主图" name="img1">
-              <Upload>
+              <Upload maxCount={1} beforeUpload={() => false}>
                 <Button icon={<UploadOutlined />}>上传主图</Button>
               </Upload>
-              <Input style={{ marginTop: 8 }} placeholder="或输入图片 URL" />
+            </Form.Item>
+            <Form.Item label="主图 URL" name="img1Url">
+              <Input placeholder="输入图片 URL" />
             </Form.Item>
             {branch === 'withRef' && (
-              <Form.Item label="参考图" name="img2">
-                <Upload multiple>
-                  <Button icon={<UploadOutlined />}>上传参考图</Button>
-                </Upload>
-                <Input.TextArea
-                  style={{ marginTop: 8 }}
-                  placeholder="或输入图片 URL 列表，每行一个"
-                  rows={4}
-                />
-              </Form.Item>
+              <>
+                <Form.Item label="参考图" name="img2">
+                  <Upload multiple beforeUpload={() => false}>
+                    <Button icon={<UploadOutlined />}>上传参考图</Button>
+                  </Upload>
+                </Form.Item>
+                <Form.Item label="参考图 URL" name="img2Urls">
+                  <Input.TextArea
+                    placeholder="输入图片 URL 列表，每行一个"
+                    rows={4}
+                  />
+                </Form.Item>
+              </>
             )}
             <Form.Item label="卖点文案" name="maidian">
               <Input.TextArea rows={6} placeholder="请输入卖点文案" />
@@ -84,15 +161,17 @@ const DetailImagePage = () => {
             <Form.Item label="产品名称" name="name">
               <Input placeholder="请输入产品名称" />
             </Form.Item>
-            <Button type="primary">开始生成</Button>
+            <Button type="primary" loading={loading} onClick={handleSubmit}>
+              开始生成
+            </Button>
           </Form>
         </Card>
         <ResultPanel
           title="生成结果"
           streamText={streamText}
-          jsonText={streamText}
+          jsonText={jsonText}
           onCopyText={() => navigator.clipboard.writeText(streamText)}
-          onCopyJson={() => navigator.clipboard.writeText(streamText)}
+          onCopyJson={() => navigator.clipboard.writeText(jsonText)}
         />
       </Space>
     </div>

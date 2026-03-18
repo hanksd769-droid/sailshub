@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: coze_app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ./api
+    environment:
+      PORT: 3000
+      COZE_API_TOKEN: ${COZE_API_TOKEN}
+      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/coze_app
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: ./web
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+
+volumes:
+  pgdata:
