@@ -8,6 +8,7 @@ const router = Router();
 const upload = multer();
 
 router.post('/upload', upload.single('file'), async (req, res) => {
+  console.log('hit /api/files/upload', req.file?.originalname);
   if (!req.file) {
     return res.status(400).json({ success: false, message: '缺少文件' });
   }
