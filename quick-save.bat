@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-cd /d E:\web\sailshub
+cd /d E:\web
 
 set MSG=%~1
 if "%MSG%"=="" set MSG=update
