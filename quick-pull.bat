@@ -1,3 +1,3 @@
-git clone --depth 1 https://github.com/hanksd769-droid/sailshub.git
 cd /d E:\web
-pause
+git remote add gitee https://gitee.com/Aa85772203/web.git
+git push -u gitee main
