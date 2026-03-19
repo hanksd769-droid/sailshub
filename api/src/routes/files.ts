@@ -26,7 +26,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
   if (!response.ok) {
     const text = await response.text();
-    return res.status(500).json({ success: false, message: text });
+    console.error('Coze upload failed:', response.status, text);
+    return res.status(500).json({
+      success: false,
+      message: `Upload failed: ${response.status}`,
+      detail: text,
+    });
   }
 
   const data = await response.json();
