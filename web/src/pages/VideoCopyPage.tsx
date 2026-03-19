@@ -30,10 +30,15 @@ const VideoCopyPage = () => {
       }
 
       const uploadResponse = await uploadFile(fileItem.originFileObj as File);
-      const fileId = uploadResponse?.data?.file_id ?? uploadResponse?.file_id;
+      console.log('uploadResponse:', uploadResponse);
+      const fileId =
+        uploadResponse?.data?.file_id ??
+        uploadResponse?.data?.id ??
+        uploadResponse?.file_id ??
+        uploadResponse?.id;
 
       if (!fileId) {
-        throw new Error('文件上传失败');
+        throw new Error(`文件上传失败: ${JSON.stringify(uploadResponse)}`);
       }
 
       await runWorkflowStream(
