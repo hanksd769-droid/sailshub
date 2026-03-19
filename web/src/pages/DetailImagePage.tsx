@@ -65,13 +65,21 @@ const DetailImagePage = () => {
         }
       }
 
-      const parameters: Record<string, unknown> = {
-        img1: mainImage,
-        img2: refImages && refImages.length > 0 ? refImages : undefined,
-        maidian: values.maidian,
-        name: values.name,
-        aspectRatio: values.aspectRatio,
-      };
+      const parameters: Record<string, unknown> =
+        branch === 'withRef'
+          ? {
+              img1: mainImage,
+              img2: refImages && refImages.length > 0 ? refImages : undefined,
+              maidian: values.maidian,
+              name: values.name,
+              aspectRatio: values.aspectRatio,
+            }
+          : {
+              img: mainImage,
+              maidian: values.maidian,
+              name: values.name,
+              aspectRatio: values.aspectRatio,
+            };
 
       await runWorkflowStream(
         branch === 'withRef' ? 'detail-image-with-ref' : 'detail-image-no-ref',
