@@ -1,5 +1,11 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000';
 
+let onUnauthorized: (() => void) | null = null;
+
+export const setUnauthorizedHandler = (handler: () => void) => {
+  onUnauthorized = handler;
+};
+
 export const getToken = () => localStorage.getItem('token');
 export const setToken = (token: string) => localStorage.setItem('token', token);
 export const clearToken = () => localStorage.removeItem('token');
@@ -17,6 +23,13 @@ export const apiFetch = async <T>(path: string, options: RequestInit = {}) => {
     ...options,
     headers,
   });
+
+  if (response.status === 401) {
+    clearToken();
+    if (onUnauthorized) {
+      onUnauthorized();
+    }
+  }
 
   if (!response.ok) {
     const text = await response.text();

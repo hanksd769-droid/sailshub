@@ -1,5 +1,6 @@
-import { Layout, Menu, Typography, Avatar, Space } from 'antd';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Layout, Menu, Typography, Avatar, Space, Button } from 'antd';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { clearToken } from '../lib/api';
 import {
   AppstoreOutlined,
   PictureOutlined,
@@ -11,6 +12,12 @@ const { Header, Sider, Content } = Layout;
 
 const MainLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    clearToken();
+    navigate('/login');
+  };
   const menuItems = [
     {
       key: '/dashboard',
@@ -49,6 +56,9 @@ const MainLayout = () => {
           <Space style={{ float: 'right' }}>
             <Avatar icon={<UserOutlined />} />
             <Typography.Text>管理员</Typography.Text>
+            <Button type="link" onClick={handleLogout}>
+              退出登录
+            </Button>
           </Space>
         </Header>
         <Content style={{ padding: 24 }}>

@@ -1,4 +1,5 @@
-import { Route, Routes, Navigate } from 'react-router-dom';
+import { Route, Routes, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import AuthLayout from './layouts/AuthLayout';
 import MainLayout from './layouts/MainLayout';
 import LoginPage from './pages/LoginPage';
@@ -6,7 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import DetailImagePage from './pages/DetailImagePage';
 import VideoCopyPage from './pages/VideoCopyPage';
-import { getToken } from './lib/api';
+import { apiFetch, clearToken, getToken, setUnauthorizedHandler } from './lib/api';
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
   const token = getToken();
@@ -16,7 +17,26 @@ const RequireAuth = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
-const App = () => {
+const AppRoutes = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      clearToken();
+      navigate('/login');
+    });
+
+    const token = getToken();
+    if (!token) {
+      return;
+    }
+
+    apiFetch('/api/auth/me').catch(() => {
+      clearToken();
+      navigate('/login');
+    });
+  }, [navigate]);
+
   return (
     <Routes>
       <Route element={<AuthLayout />}>
@@ -38,5 +58,7 @@ const App = () => {
     </Routes>
   );
 };
+
+const App = () => <AppRoutes />;
 
 export default App;
