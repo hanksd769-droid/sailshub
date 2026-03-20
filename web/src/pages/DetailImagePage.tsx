@@ -39,7 +39,15 @@ const DetailImagePage = () => {
       let mainImage = values.img1Url as string | undefined;
       if (!mainImage && values.img1?.file) {
         const uploadResponse = await uploadFile(values.img1.file as File);
-        mainImage = uploadResponse?.data?.file_id ?? uploadResponse?.file_id;
+        mainImage =
+          uploadResponse?.data?.file_id ??
+          uploadResponse?.data?.id ??
+          uploadResponse?.file_id ??
+          uploadResponse?.id;
+      }
+
+      if (!mainImage) {
+        throw new Error('主图参数缺失，请上传主图或填写主图URL');
       }
 
       let refImages: string[] | undefined;
@@ -68,17 +76,23 @@ const DetailImagePage = () => {
       const parameters: Record<string, unknown> =
         branch === 'withRef'
           ? {
-              img1: mainImage,
-              img2: refImages && refImages.length > 0 ? refImages : undefined,
+              img1: mainImage ? JSON.stringify({ file_id: mainImage }) : undefined,
+              img2:
+                refImages && refImages.length > 0
+                  ? refImages.map((item) =>
+                      item.startsWith('http')
+                        ? item
+                        : JSON.stringify({ file_id: item })
+                    )
+                  : undefined,
               maidian: values.maidian,
               name: values.name,
               aspectRatio: values.aspectRatio,
             }
           : {
-              img: mainImage,
+              img: JSON.stringify({ file_id: mainImage }),
               maidian: values.maidian,
               name: values.name,
-              aspectRatio: values.aspectRatio,
             };
 
       await runWorkflowStream(

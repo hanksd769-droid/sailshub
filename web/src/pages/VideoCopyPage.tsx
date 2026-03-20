@@ -44,7 +44,7 @@ const VideoCopyPage = () => {
       await runWorkflowStream(
         'video-copy',
         {
-          input: [fileId],
+          input: [JSON.stringify({ file_id: fileId })],
         },
         (data) => {
           setJsonText((prev) => `${prev}\n${JSON.stringify(data, null, 2)}`);
