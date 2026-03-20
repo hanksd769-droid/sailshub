@@ -121,7 +121,12 @@ export const runWorkflowStream = async (
       if (part.startsWith('data: ')) {
         const json = part.replace('data: ', '');
         try {
-          onMessage(JSON.parse(json));
+          const parsed = JSON.parse(json) as { event?: string };
+          if (parsed?.event === 'Done') {
+            hasDone = true;
+            onDone();
+          }
+          onMessage(parsed);
         } catch {
           onMessage(json);
         }
