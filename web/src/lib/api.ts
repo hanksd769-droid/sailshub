@@ -85,6 +85,8 @@ export const runWorkflowStream = async (
   const decoder = new TextDecoder();
   let buffer = '';
 
+  let hasDone = false;
+
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -95,10 +97,14 @@ export const runWorkflowStream = async (
 
     for (const part of parts) {
       if (part.startsWith('event: done')) {
+        hasDone = true;
         onDone();
         continue;
       }
       if (part.startsWith('event: error')) {
+        if (hasDone) {
+          continue;
+        }
         const messageLine = part.split('\n').find((line) => line.startsWith('data: '));
         let message = messageLine ? messageLine.replace('data: ', '') : '运行失败';
         try {

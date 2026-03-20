@@ -102,8 +102,31 @@ const DetailImagePage = () => {
         (data) => {
           setProgress((prev) => Math.min(prev + 5, 95));
           setJsonText((prev) => `${prev}\n${JSON.stringify(data, null, 2)}`);
+
           if (typeof data === 'string') {
             setStreamText((prev) => `${prev}${data}`);
+            return;
+          }
+
+          const eventObj = data as {
+            event?: string;
+            data?: { content?: string; node_title?: string; node_type?: string };
+          };
+
+          if (eventObj.event === 'Message' && eventObj.data?.content) {
+            try {
+              const parsedContent = JSON.parse(eventObj.data.content) as {
+                output?: Array<{ output?: string[] }>;
+              };
+              const links = (parsedContent.output || [])
+                .flatMap((item) => item.output || [])
+                .filter((item) => typeof item === 'string');
+              if (links.length > 0) {
+                setStreamText((prev) => `${prev}${prev ? '\n' : ''}${links.join('\n')}`);
+              }
+            } catch {
+              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${eventObj.data?.content}`);
+            }
           }
         },
         () => {
