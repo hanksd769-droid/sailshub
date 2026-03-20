@@ -19,6 +19,9 @@ router.post('/:key/run', authRequired, async (req: AuthRequest, res) => {
     return res.status(400).json({ success: false, message: '缺少参数' });
   }
 
+  console.log('[run] module:', moduleKey, 'workflow:', moduleInfo.workflowId);
+  console.log('[run] parameters:', JSON.stringify(parameters));
+
   const runId = uuidv4();
   await pool.query(
     'insert into runs (id, user_id, module_key, workflow_id, input, status) values ($1, $2, $3, $4, $5, $6)',

@@ -100,7 +100,15 @@ export const runWorkflowStream = async (
       }
       if (part.startsWith('event: error')) {
         const messageLine = part.split('\n').find((line) => line.startsWith('data: '));
-        const message = messageLine ? messageLine.replace('data: ', '') : '运行失败';
+        let message = messageLine ? messageLine.replace('data: ', '') : '运行失败';
+        try {
+          const parsed = JSON.parse(message) as { message?: string };
+          if (parsed?.message) {
+            message = parsed.message;
+          }
+        } catch {
+          // keep raw message
+        }
         onError(message);
         continue;
       }
