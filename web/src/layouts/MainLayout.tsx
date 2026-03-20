@@ -6,6 +6,7 @@ import {
   PictureOutlined,
   VideoCameraOutlined,
   UserOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -18,11 +19,17 @@ const MainLayout = () => {
     clearToken();
     navigate('/login');
   };
+
   const menuItems = [
     {
       key: '/dashboard',
       icon: <AppstoreOutlined />,
       label: <NavLink to="/dashboard">功能首页</NavLink>,
+    },
+    {
+      key: '/runs',
+      icon: <UnorderedListOutlined />,
+      label: <NavLink to="/runs">我的任务</NavLink>,
     },
     {
       key: '/modules/detail-image',
@@ -43,14 +50,11 @@ const MainLayout = () => {
           <Typography.Title level={4} style={{ margin: 0 }}>
             Coze 工作台
           </Typography.Title>
-          <Typography.Text type="secondary">内网功能集成· v1.0.2</Typography.Text>
+          <Typography.Text type="secondary">内网功能集成 · v1.0.3s</Typography.Text>
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-        />
+        <Menu mode="inline" selectedKeys={[location.pathname]} items={menuItems} />
       </Sider>
+
       <Layout>
         <Header style={{ background: '#fff', padding: '0 24px' }}>
           <Space style={{ float: 'right' }}>
@@ -61,6 +65,7 @@ const MainLayout = () => {
             </Button>
           </Space>
         </Header>
+
         <Content style={{ padding: 24 }}>
           <Outlet />
         </Content>
