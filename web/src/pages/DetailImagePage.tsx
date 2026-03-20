@@ -9,6 +9,8 @@ const DetailImagePage = () => {
   const [streamText, setStreamText] = useState('');
   const [jsonText, setJsonText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [errorText, setErrorText] = useState('');
   const [form] = Form.useForm();
 
   const workflowOptions = useMemo(
@@ -33,6 +35,8 @@ const DetailImagePage = () => {
     const values = await form.validateFields();
     setStreamText('');
     setJsonText('');
+    setErrorText('');
+    setProgress(5);
     setLoading(true);
 
     try {
@@ -40,6 +44,7 @@ const DetailImagePage = () => {
       if (!mainImage && values.img1?.file) {
         const uploadResponse = await uploadFile(values.img1.file as File);
         mainImage = uploadResponse?.data?.data?.id;
+        setProgress(25);
       }
 
       if (!mainImage) {
@@ -53,7 +58,7 @@ const DetailImagePage = () => {
           for (const fileItem of values.img2.fileList) {
             if (fileItem.originFileObj) {
               const uploadResponse = await uploadFile(fileItem.originFileObj as File);
-              const fileId = uploadResponse?.data?.file_id ?? uploadResponse?.file_id;
+              const fileId = uploadResponse?.data?.data?.id;
               if (fileId) {
                 refImages.push(fileId);
               }
@@ -95,23 +100,28 @@ const DetailImagePage = () => {
         branch === 'withRef' ? 'detail-image-with-ref' : 'detail-image-no-ref',
         parameters,
         (data) => {
+          setProgress((prev) => Math.min(prev + 5, 95));
           setJsonText((prev) => `${prev}\n${JSON.stringify(data, null, 2)}`);
           if (typeof data === 'string') {
             setStreamText((prev) => `${prev}${data}`);
           }
         },
         () => {
+          setProgress(100);
           setLoading(false);
           message.success('生成完成');
         },
         (err) => {
           setLoading(false);
+          setErrorText(err || '生成失败');
           message.error(err || '生成失败');
         }
       );
     } catch (error) {
       setLoading(false);
-      message.error(error instanceof Error ? error.message : '生成失败');
+      const msg = error instanceof Error ? error.message : '生成失败';
+      setErrorText(msg);
+      message.error(msg);
     }
   };
 
@@ -188,6 +198,9 @@ const DetailImagePage = () => {
           title="生成结果"
           streamText={streamText}
           jsonText={jsonText}
+          loading={loading}
+          progress={progress}
+          errorText={errorText}
           onCopyText={() => navigator.clipboard.writeText(streamText)}
           onCopyJson={() => navigator.clipboard.writeText(jsonText)}
         />

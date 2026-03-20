@@ -18,6 +18,21 @@ const DashboardPage = () => {
         <Input.Search placeholder="搜索功能" style={{ width: 260 }} />
       </div>
       <div className="dashboard-grid">
+        <Card className="module-card" onClick={() => navigate('/runs')}>
+          <Space direction="vertical" size={8}>
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              我的任务
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              查看当前账号的运行记录与错误详情
+            </Typography.Text>
+            <Space size={8}>
+              <Tag>任务</Tag>
+              <Tag>状态</Tag>
+              <Tag>历史</Tag>
+            </Space>
+          </Space>
+        </Card>
         <Card
           className="module-card"
           onClick={() => navigate('/modules/detail-image')}

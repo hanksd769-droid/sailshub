@@ -1,4 +1,4 @@
-import { Button, Space, Typography } from 'antd';
+import { Alert, Button, Progress, Space, Typography } from 'antd';
 
 interface ResultPanelProps {
   title: string;
@@ -6,6 +6,9 @@ interface ResultPanelProps {
   jsonText?: string;
   onCopyText?: () => void;
   onCopyJson?: () => void;
+  loading?: boolean;
+  progress?: number;
+  errorText?: string;
 }
 
 const ResultPanel = ({
@@ -14,6 +17,9 @@ const ResultPanel = ({
   jsonText,
   onCopyText,
   onCopyJson,
+  loading,
+  progress,
+  errorText,
 }: ResultPanelProps) => {
   return (
     <div className="result-panel">
@@ -28,6 +34,9 @@ const ResultPanel = ({
           </Button>
         </Space>
       </div>
+      {typeof progress === 'number' && <Progress percent={progress} size="small" />}
+      {loading && <Typography.Text type="secondary">任务运行中...</Typography.Text>}
+      {errorText && <Alert type="error" message={errorText} showIcon />}
       <div className="stream-box">{streamText || '等待输出...'}</div>
     </div>
   );

@@ -43,7 +43,7 @@ const MainLayout = () => {
           <Typography.Title level={4} style={{ margin: 0 }}>
             Coze 工作台
           </Typography.Title>
-          <Typography.Text type="secondary">内网功能集成· v1.0.1</Typography.Text>
+          <Typography.Text type="secondary">内网功能集成· v1.0.2</Typography.Text>
         </div>
         <Menu
           mode="inline"

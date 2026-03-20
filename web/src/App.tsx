@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import DetailImagePage from './pages/DetailImagePage';
 import VideoCopyPage from './pages/VideoCopyPage';
+import RunsPage from './pages/RunsPage';
 import { apiFetch, clearToken, getToken, setUnauthorizedHandler } from './lib/api';
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
@@ -52,6 +53,7 @@ const AppRoutes = () => {
       >
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/runs" element={<RunsPage />} />
         <Route path="/modules/detail-image" element={<DetailImagePage />} />
         <Route path="/modules/video-copy" element={<VideoCopyPage />} />
       </Route>

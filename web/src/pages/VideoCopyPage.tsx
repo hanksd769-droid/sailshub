@@ -8,6 +8,8 @@ const VideoCopyPage = () => {
   const [streamText, setStreamText] = useState('');
   const [jsonText, setJsonText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [errorText, setErrorText] = useState('');
   const [form] = Form.useForm();
 
   const handleSubmit = async () => {
@@ -19,6 +21,8 @@ const VideoCopyPage = () => {
 
     setStreamText('');
     setJsonText('');
+    setErrorText('');
+    setProgress(5);
     setLoading(true);
 
     try {
@@ -32,6 +36,7 @@ const VideoCopyPage = () => {
       const uploadResponse = await uploadFile(fileItem.originFileObj as File);
       console.log('uploadResponse:', uploadResponse);
       const fileId = uploadResponse?.data?.data?.id;
+      setProgress(30);
 
       if (!fileId) {
         throw new Error(`文件上传失败: ${JSON.stringify(uploadResponse)}`);
@@ -43,23 +48,28 @@ const VideoCopyPage = () => {
           input: [JSON.stringify({ file_id: fileId })],
         },
         (data) => {
+          setProgress((prev) => Math.min(prev + 5, 95));
           setJsonText((prev) => `${prev}\n${JSON.stringify(data, null, 2)}`);
           if (typeof data === 'string') {
             setStreamText((prev) => `${prev}${data}`);
           }
         },
         () => {
+          setProgress(100);
           setLoading(false);
           message.success('提取完成');
         },
         (err) => {
           setLoading(false);
+          setErrorText(err || '提取失败');
           message.error(err || '提取失败');
         }
       );
     } catch (error) {
       setLoading(false);
-      message.error(error instanceof Error ? error.message : '提取失败');
+      const msg = error instanceof Error ? error.message : '提取失败';
+      setErrorText(msg);
+      message.error(msg);
     }
   };
 
@@ -92,6 +102,9 @@ const VideoCopyPage = () => {
           title="提取结果"
           streamText={streamText}
           jsonText={jsonText}
+          loading={loading}
+          progress={progress}
+          errorText={errorText}
           onCopyText={() => navigator.clipboard.writeText(streamText)}
           onCopyJson={() => navigator.clipboard.writeText(jsonText)}
         />

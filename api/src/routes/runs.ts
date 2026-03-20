@@ -7,6 +7,45 @@ import { cozeClient } from '../coze';
 
 const router = Router();
 
+router.get('/', authRequired, async (req: AuthRequest, res) => {
+  const userId = req.user?.userId;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: '登录失效' });
+  }
+
+  const result = await pool.query(
+    `select id, module_key, workflow_id, input, output, status, created_at, finished_at
+     from runs
+     where user_id = $1
+     order by created_at desc
+     limit 100`,
+    [userId]
+  );
+
+  return res.json({ success: true, data: result.rows });
+});
+
+router.get('/:id', authRequired, async (req: AuthRequest, res) => {
+  const userId = req.user?.userId;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: '登录失效' });
+  }
+
+  const result = await pool.query(
+    `select id, module_key, workflow_id, input, output, status, created_at, finished_at
+     from runs
+     where id = $1 and user_id = $2
+     limit 1`,
+    [req.params.id, userId]
+  );
+
+  if (result.rows.length === 0) {
+    return res.status(404).json({ success: false, message: '任务不存在' });
+  }
+
+  return res.json({ success: true, data: result.rows[0] });
+});
+
 router.post('/:key/run', authRequired, async (req: AuthRequest, res) => {
   const moduleKey = req.params.key as keyof typeof modules;
   const moduleInfo = modules[moduleKey];
