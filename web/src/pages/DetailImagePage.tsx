@@ -39,11 +39,7 @@ const DetailImagePage = () => {
       let mainImage = values.img1Url as string | undefined;
       if (!mainImage && values.img1?.file) {
         const uploadResponse = await uploadFile(values.img1.file as File);
-        mainImage =
-          uploadResponse?.data?.file_id ??
-          uploadResponse?.data?.id ??
-          uploadResponse?.file_id ??
-          uploadResponse?.id;
+        mainImage = uploadResponse?.data?.data?.id;
       }
 
       if (!mainImage) {
