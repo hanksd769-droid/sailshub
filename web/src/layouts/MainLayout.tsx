@@ -7,6 +7,7 @@ import {
   VideoCameraOutlined,
   UserOutlined,
   UnorderedListOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -41,6 +42,11 @@ const MainLayout = () => {
       icon: <VideoCameraOutlined />,
       label: <NavLink to="/modules/video-copy">视频提取文案</NavLink>,
     },
+    {
+      key: '/modules/product-copy',
+      icon: <FileTextOutlined />,
+      label: <NavLink to="/modules/product-copy">产品文案生成</NavLink>,
+    },
   ];
 
   return (
@@ -50,7 +56,7 @@ const MainLayout = () => {
           <Typography.Title level={4} style={{ margin: 0 }}>
             Coze 工作台
           </Typography.Title>
-          <Typography.Text type="secondary">内网功能集成 · v1.0.3s</Typography.Text>
+          <Typography.Text type="secondary">内网功能集成 · v1.1.0</Typography.Text>
         </div>
         <Menu mode="inline" selectedKeys={[location.pathname]} items={menuItems} />
       </Sider>
