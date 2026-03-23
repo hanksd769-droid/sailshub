@@ -7,14 +7,13 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import DetailImagePage from './pages/DetailImagePage';
 import VideoCopyPage from './pages/VideoCopyPage';
+import ProductCopyPage from './pages/ProductCopyPage';
 import RunsPage from './pages/RunsPage';
 import { apiFetch, clearToken, getToken, setUnauthorizedHandler } from './lib/api';
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
   const token = getToken();
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!token) return <Navigate to="/login" replace />;
   return children;
 };
 
@@ -28,9 +27,7 @@ const AppRoutes = () => {
     });
 
     const token = getToken();
-    if (!token) {
-      return;
-    }
+    if (!token) return;
 
     apiFetch('/api/auth/me').catch(() => {
       clearToken();
@@ -44,6 +41,7 @@ const AppRoutes = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Route>
+
       <Route
         element={
           <RequireAuth>
@@ -56,6 +54,7 @@ const AppRoutes = () => {
         <Route path="/runs" element={<RunsPage />} />
         <Route path="/modules/detail-image" element={<DetailImagePage />} />
         <Route path="/modules/video-copy" element={<VideoCopyPage />} />
+        <Route path="/modules/product-copy" element={<ProductCopyPage />} />
       </Route>
     </Routes>
   );
