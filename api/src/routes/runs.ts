@@ -7,6 +7,9 @@ import { cozeClient } from '../coze';
 
 const router = Router();
 
+/**
+ * 我的任务列表（仅当前登录用户）
+ */
 router.get('/', authRequired, async (req: AuthRequest, res) => {
   const userId = req.user?.userId;
   if (!userId) {
@@ -25,6 +28,9 @@ router.get('/', authRequired, async (req: AuthRequest, res) => {
   return res.json({ success: true, data: result.rows });
 });
 
+/**
+ * 我的任务详情（仅当前登录用户）
+ */
 router.get('/:id', authRequired, async (req: AuthRequest, res) => {
   const userId = req.user?.userId;
   if (!userId) {
@@ -58,10 +64,8 @@ router.post('/:key/run', authRequired, async (req: AuthRequest, res) => {
     return res.status(400).json({ success: false, message: '缺少参数' });
   }
 
-  console.log('[run] module:', moduleKey, 'workflow:', moduleInfo.workflowId);
-  console.log('[run] parameters:', JSON.stringify(parameters));
-
   const runId = uuidv4();
+
   await pool.query(
     'insert into runs (id, user_id, module_key, workflow_id, input, status) values ($1, $2, $3, $4, $5, $6)',
     [runId, req.user?.userId ?? null, moduleKey, moduleInfo.workflowId, parameters, 'RUNNING']
@@ -74,6 +78,8 @@ router.post('/:key/run', authRequired, async (req: AuthRequest, res) => {
   });
 
   const chunks: unknown[] = [];
+  let hasDoneEvent = false;
+  let hasUsefulOutput = false;
 
   try {
     const stream = await cozeClient.workflows.runs.stream({
@@ -83,6 +89,25 @@ router.post('/:key/run', authRequired, async (req: AuthRequest, res) => {
 
     for await (const chunk of stream) {
       chunks.push(chunk);
+
+      // 判断是否已有有效输出（Message + content）
+      const maybeEvent = chunk as {
+        event?: string;
+        data?: { content?: string };
+      };
+
+      if (
+        maybeEvent?.event === 'Message' &&
+        typeof maybeEvent?.data?.content === 'string' &&
+        maybeEvent.data.content.trim() !== ''
+      ) {
+        hasUsefulOutput = true;
+      }
+
+      if (maybeEvent?.event === 'Done') {
+        hasDoneEvent = true;
+      }
+
       res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     }
 
@@ -91,16 +116,40 @@ router.post('/:key/run', authRequired, async (req: AuthRequest, res) => {
       chunks,
       runId,
     ]);
+
+    // 标准 SSE done（前端兼容）
     res.write('event: done\n');
     res.write(`data: ${JSON.stringify({ runId })}\n\n`);
     res.end();
   } catch (error) {
     const message = error instanceof Error ? error.message : '运行失败';
+
+    // 关键修复：
+    // 如果已经有有效输出或Done事件，则认为任务总体成功（附加warning，不标FAILED）
+    if (hasUsefulOutput || hasDoneEvent) {
+      const outputWithWarning = {
+        chunks,
+        warning: message,
+      };
+
+      await pool.query('update runs set status = $1, output = $2, finished_at = now() where id = $3', [
+        'SUCCESS',
+        outputWithWarning,
+        runId,
+      ]);
+
+      res.write('event: done\n');
+      res.write(`data: ${JSON.stringify({ runId, warning: message })}\n\n`);
+      res.end();
+      return;
+    }
+
     await pool.query('update runs set status = $1, output = $2, finished_at = now() where id = $3', [
       'FAILED',
       { error: message },
       runId,
     ]);
+
     res.write('event: error\n');
     res.write(`data: ${JSON.stringify({ message })}\n\n`);
     res.end();
