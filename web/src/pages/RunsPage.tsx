@@ -19,6 +19,17 @@ const statusColor: Record<RunItem['status'], string> = {
   FAILED: 'error',
 };
 
+const preStyle = {
+  whiteSpace: 'pre-wrap' as const,
+  wordBreak: 'break-all' as const,
+  overflow: 'auto' as const,
+  background: '#fafafa',
+  border: '1px solid #f0f0f0',
+  borderRadius: 8,
+  padding: 12,
+  margin: 0,
+};
+
 const RunsPage = () => {
   const [runs, setRuns] = useState<RunItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,9 +58,7 @@ const RunsPage = () => {
           <Typography.Title level={3} style={{ margin: 0 }}>
             我的任务记录
           </Typography.Title>
-          <Typography.Text type="secondary">
-            仅展示当前登录用户的任务
-          </Typography.Text>
+          <Typography.Text type="secondary">仅展示当前登录用户的任务</Typography.Text>
         </div>
         <Button onClick={fetchRuns}>刷新</Button>
       </div>
@@ -61,8 +70,8 @@ const RunsPage = () => {
           dataSource={runs}
           pagination={{ pageSize: 10 }}
           columns={[
-            { title: '任务ID', dataIndex: 'id', width: 220 },
-            { title: '模块', dataIndex: 'module_key', width: 180 },
+            { title: '任务ID', dataIndex: 'id', width: 280 },
+            { title: '模块', dataIndex: 'module_key', width: 200 },
             {
               title: '状态',
               dataIndex: 'status',
@@ -94,22 +103,26 @@ const RunsPage = () => {
         />
       </Card>
 
-      <Modal
-        title="任务详情"
-        open={!!selected}
-        onCancel={() => setSelected(null)}
-        footer={null}
-        width={900}
-      >
+      <Modal title="任务详情" open={!!selected} onCancel={() => setSelected(null)} footer={null} width={980}>
         {selected && (
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space direction="vertical" style={{ width: '100%' }} size={14}>
             <Typography.Text strong>任务ID：{selected.id}</Typography.Text>
             <Typography.Text>模块：{selected.module_key}</Typography.Text>
             <Typography.Text>状态：{selected.status}</Typography.Text>
-            <Typography.Title level={5}>输入参数</Typography.Title>
-            <pre>{JSON.stringify(selected.input, null, 2)}</pre>
-            <Typography.Title level={5}>输出结果</Typography.Title>
-            <pre>{JSON.stringify(selected.output, null, 2)}</pre>
+
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              输入参数
+            </Typography.Title>
+            <pre style={{ ...preStyle, maxHeight: 260 }}>
+              {JSON.stringify(selected.input, null, 2)}
+            </pre>
+
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              输出结果
+            </Typography.Title>
+            <pre style={{ ...preStyle, maxHeight: 360 }}>
+              {JSON.stringify(selected.output, null, 2)}
+            </pre>
           </Space>
         )}
       </Modal>
