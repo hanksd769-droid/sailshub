@@ -1,5 +1,5 @@
 import { Button, Card, Modal, Space, Table, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../lib/api';
 
 type RunItem = {
@@ -30,10 +30,41 @@ const preStyle = {
   margin: 0,
 };
 
+const urlReg = /https?:\/\/[^\s"'<>]+/g;
+
+// 递归提取对象内所有 URL（包括 debug_url、content 里的链接等）
+const collectUrls = (value: unknown, bag: Set<string>) => {
+  if (value == null) return;
+
+  if (typeof value === 'string') {
+    const matches = value.match(urlReg);
+    if (matches) {
+      matches.forEach((m) => bag.add(m));
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectUrls(item, bag));
+    return;
+  }
+
+  if (typeof value === 'object') {
+    Object.values(value as Record<string, unknown>).forEach((v) => collectUrls(v, bag));
+  }
+};
+
 const RunsPage = () => {
   const [runs, setRuns] = useState<RunItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<RunItem | null>(null);
+
+  const debugLinks = useMemo(() => {
+    if (!selected) return [];
+    const bag = new Set<string>();
+    collectUrls(selected.output, bag);
+    return Array.from(bag);
+  }, [selected]);
 
   const fetchRuns = async () => {
     setLoading(true);
@@ -116,6 +147,21 @@ const RunsPage = () => {
             <pre style={{ ...preStyle, maxHeight: 260 }}>
               {JSON.stringify(selected.input, null, 2)}
             </pre>
+
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              调试链接
+            </Typography.Title>
+            {debugLinks.length > 0 ? (
+              <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                {debugLinks.map((link) => (
+                  <a key={link} href={link} target="_blank" rel="noreferrer">
+                    {link}
+                  </a>
+                ))}
+              </Space>
+            ) : (
+              <Typography.Text type="secondary">未检测到链接</Typography.Text>
+            )}
 
             <Typography.Title level={5} style={{ margin: 0 }}>
               输出结果

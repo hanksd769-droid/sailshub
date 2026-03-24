@@ -1,205 +1,83 @@
-import { Button, Card, Modal, Space, Table, Tag, Typography } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
-import { apiFetch } from '../lib/api';
+import { Layout, Menu, Typography, Avatar, Space, Button } from 'antd';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { clearToken } from '../lib/api';
+import {
+  AppstoreOutlined,
+  PictureOutlined,
+  VideoCameraOutlined,
+  UserOutlined,
+  UnorderedListOutlined,
+  FileTextOutlined,
+} from '@ant-design/icons';
 
-type RunItem = {
-  id: string;
-  module_key: string;
-  workflow_id: string;
-  input: unknown;
-  output: unknown;
-  status: 'RUNNING' | 'SUCCESS' | 'FAILED';
-  created_at: string;
-  finished_at: string | null;
-};
+const { Header, Sider, Content } = Layout;
 
-const statusColor: Record<RunItem['status'], string> = {
-  RUNNING: 'processing',
-  SUCCESS: 'success',
-  FAILED: 'error',
-};
+const MainLayout = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
 
-const preStyle = {
-  whiteSpace: 'pre-wrap' as const,
-  wordBreak: 'break-all' as const,
-  overflow: 'auto' as const,
-  background: '#fafafa',
-  border: '1px solid #f0f0f0',
-  borderRadius: 8,
-  padding: 12,
-  margin: 0,
-};
-
-const urlRegex = /https?:\/\/[^\s"']+/g;
-
-const extractDebugLinks = (value: unknown): string[] => {
-  const links = new Set<string>();
-
-  const walk = (node: unknown) => {
-    if (!node) return;
-
-    if (typeof node === 'string') {
-      // 1) 字符串里提取 URL
-      const matches = node.match(urlRegex) || [];
-      matches.forEach((u) => {
-        if (u.toLowerCase().includes('debug') || u.toLowerCase().includes('trace') || u.toLowerCase().includes('log')) {
-          links.add(u);
-        }
-      });
-
-      // 2) 若字符串本身是 JSON，再递归
-      try {
-        const parsed = JSON.parse(node);
-        walk(parsed);
-      } catch {
-        // ignore
-      }
-      return;
-    }
-
-    if (Array.isArray(node)) {
-      node.forEach(walk);
-      return;
-    }
-
-    if (typeof node === 'object') {
-      const record = node as Record<string, unknown>;
-      Object.entries(record).forEach(([k, v]) => {
-        const key = k.toLowerCase();
-        if (
-          (key.includes('debug') || key.includes('trace') || key.includes('log')) &&
-          typeof v === 'string' &&
-          /^https?:\/\//i.test(v)
-        ) {
-          links.add(v);
-        }
-        walk(v);
-      });
-    }
+  const handleLogout = () => {
+    clearToken();
+    navigate('/login');
   };
 
-  walk(value);
-  return Array.from(links);
-};
-
-const RunsPage = () => {
-  const [runs, setRuns] = useState<RunItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState<RunItem | null>(null);
-
-  const debugLinks = useMemo(
-    () => (selected ? extractDebugLinks(selected.output) : []),
-    [selected]
-  );
-
-  const fetchRuns = async () => {
-    setLoading(true);
-    try {
-      const response = await apiFetch<{ success: boolean; data: RunItem[] }>('/api/runs');
-      setRuns(response.data || []);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRuns();
-    const timer = setInterval(fetchRuns, 5000);
-    return () => clearInterval(timer);
-  }, []);
+  const menuItems = [
+    {
+      key: '/dashboard',
+      icon: <AppstoreOutlined />,
+      label: <NavLink to="/dashboard">功能首页</NavLink>,
+    },
+    {
+      key: '/runs',
+      icon: <UnorderedListOutlined />,
+      label: <NavLink to="/runs">我的任务</NavLink>,
+    },
+    {
+      key: '/modules/detail-image',
+      icon: <PictureOutlined />,
+      label: <NavLink to="/modules/detail-image">详情图生成</NavLink>,
+    },
+    {
+      key: '/modules/video-copy',
+      icon: <VideoCameraOutlined />,
+      label: <NavLink to="/modules/video-copy">视频提取文案</NavLink>,
+    },
+    {
+      key: '/modules/product-copy',
+      icon: <FileTextOutlined />,
+      label: <NavLink to="/modules/product-copy">产品文案生成</NavLink>,
+    },
+  ];
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            我的任务记录
+    <Layout className="app-shell">
+      <Sider width={240} theme="light">
+        <div style={{ padding: '20px 16px' }}>
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            Coze 工作台
           </Typography.Title>
-          <Typography.Text type="secondary">仅展示当前登录用户的任务</Typography.Text>
+          <Typography.Text type="secondary">内网功能集成 · v1.1.1</Typography.Text>
         </div>
-        <Button onClick={fetchRuns}>刷新</Button>
-      </div>
+        <Menu mode="inline" selectedKeys={[location.pathname]} items={menuItems} />
+      </Sider>
 
-      <Card>
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={runs}
-          pagination={{ pageSize: 10 }}
-          columns={[
-            { title: '任务ID', dataIndex: 'id', width: 280 },
-            { title: '模块', dataIndex: 'module_key', width: 200 },
-            {
-              title: '状态',
-              dataIndex: 'status',
-              width: 120,
-              render: (status: RunItem['status']) => <Tag color={statusColor[status]}>{status}</Tag>,
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'created_at',
-              width: 200,
-              render: (value: string) => new Date(value).toLocaleString(),
-            },
-            {
-              title: '完成时间',
-              dataIndex: 'finished_at',
-              width: 200,
-              render: (value: string | null) => (value ? new Date(value).toLocaleString() : '-'),
-            },
-            {
-              title: '操作',
-              width: 120,
-              render: (_, record) => (
-                <Button type="link" onClick={() => setSelected(record)}>
-                  查看
-                </Button>
-              ),
-            },
-          ]}
-        />
-      </Card>
-
-      <Modal title="任务详情" open={!!selected} onCancel={() => setSelected(null)} footer={null} width={980}>
-        {selected && (
-          <Space direction="vertical" style={{ width: '100%' }} size={14}>
-            <Typography.Text strong>任务ID：{selected.id}</Typography.Text>
-            <Typography.Text>模块：{selected.module_key}</Typography.Text>
-            <Typography.Text>状态：{selected.status}</Typography.Text>
-
-            <Typography.Title level={5} style={{ margin: 0 }}>
-              输入参数
-            </Typography.Title>
-            <pre style={{ ...preStyle, maxHeight: 260 }}>
-              {JSON.stringify(selected.input, null, 2)}
-            </pre>
-
-            <Typography.Title level={5} style={{ margin: 0 }}>
-              调试链接
-            </Typography.Title>
-            {debugLinks.length > 0 ? (
-              <Space direction="vertical" size={6}>
-                {debugLinks.map((link) => (
-                  <a key={link} href={link} target="_blank" rel="noreferrer">
-                    {link}
-                  </a>
-                ))}
-              </Space>
-            ) : (
-              <Typography.Text type="secondary">未检测到调试链接</Typography.Text>
-            )}
-
-            <Typography.Title level={5} style={{ margin: 0 }}>
-              输出结果
-            </Typography.Title>
-            <pre style={{ ...preStyle, maxHeight: 360 }}>
-              {JSON.stringify(selected.output, null, 2)}
-            </pre>
+      <Layout>
+        <Header style={{ background: '#fff', padding: '0 24px' }}>
+          <Space style={{ float: 'right' }}>
+            <Avatar icon={<UserOutlined />} />
+            <Typography.Text>管理员</Typography.Text>
+            <Button type="link" onClick={handleLogout}>
+              退出登录
+            </Button>
           </Space>
-        )}
-      </Modal>
-    </div>
+        </Header>
+
+        <Content style={{ padding: 24 }}>
+          <Outlet />
+        </Content>
+      </Layout>
+    </Layout>
   );
 };
 
-export default RunsPage;
+export default MainLayout;
