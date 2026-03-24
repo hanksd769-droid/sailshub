@@ -1,5 +1,3 @@
-export type ModuleKey = 'detail-image-with-ref' | 'detail-image-no-ref' | 'video-copy';
-
 export const modules = {
   'detail-image-with-ref': {
     key: 'detail-image-with-ref',
@@ -13,7 +11,14 @@ export const modules = {
   },
   'video-copy': {
     key: 'video-copy',
-    name: '视频提取文案',
+    name: '提取视频文案',
     workflowId: '7569800959866617871',
   },
+  'product-copy': {
+    key: 'product-copy',
+    name: '产品文案生成',
+    workflowId: '7543166210068185138',
+  },
 } as const;
+
+export type ModuleKey = keyof typeof modules;
