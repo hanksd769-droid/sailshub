@@ -26,9 +26,7 @@ export const apiFetch = async <T>(path: string, options: RequestInit = {}) => {
 
   if (response.status === 401) {
     clearToken();
-    if (onUnauthorized) {
-      onUnauthorized();
-    }
+    if (onUnauthorized) onUnauthorized();
   }
 
   if (!response.ok) {
@@ -84,7 +82,6 @@ export const runWorkflowStream = async (
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-
   let hasDone = false;
 
   while (true) {
@@ -101,23 +98,22 @@ export const runWorkflowStream = async (
         onDone();
         continue;
       }
+
       if (part.startsWith('event: error')) {
-        if (hasDone) {
-          continue;
-        }
+        if (hasDone) continue;
+
         const messageLine = part.split('\n').find((line) => line.startsWith('data: '));
         let message = messageLine ? messageLine.replace('data: ', '') : '运行失败';
         try {
           const parsed = JSON.parse(message) as { message?: string };
-          if (parsed?.message) {
-            message = parsed.message;
-          }
+          if (parsed?.message) message = parsed.message;
         } catch {
-          // keep raw message
+          // keep raw
         }
         onError(message);
         continue;
       }
+
       if (part.startsWith('data: ')) {
         const json = part.replace('data: ', '');
         try {
@@ -133,4 +129,15 @@ export const runWorkflowStream = async (
       }
     }
   }
+};
+
+export const getVoiceConfig = async () => {
+  return apiFetch<{
+    success: boolean;
+    data: {
+      studioUrl: string;
+      apiUrl: string;
+      baseUrl: string;
+    };
+  }>('/api/voice/config');
 };
