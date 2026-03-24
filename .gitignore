@@ -1,0 +1,38 @@
+# env
+.env
+.env.*
+!.env.example
+api/.env
+web/.env
+
+# dependencies
+node_modules/
+api/node_modules/
+web/node_modules/
+
+# build outputs
+dist/
+build/
+coverage/
+api/dist/
+web/dist/
+
+# vite cache
+.vite/
+web/.vite/
+web/node_modules/.vite/
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# temp scripts/output
+_backup_local/
