@@ -17,6 +17,7 @@ const DashboardPage = () => {
         </div>
         <Input.Search placeholder="搜索功能" style={{ width: 260 }} />
       </div>
+
       <div className="dashboard-grid">
         <Card className="module-card" onClick={() => navigate('/runs')}>
           <Space direction="vertical" size={8}>
@@ -33,10 +34,8 @@ const DashboardPage = () => {
             </Space>
           </Space>
         </Card>
-        <Card
-          className="module-card"
-          onClick={() => navigate('/modules/detail-image')}
-        >
+
+        <Card className="module-card" onClick={() => navigate('/modules/detail-image')}>
           <Space direction="vertical" size={8}>
             <Typography.Title level={5} style={{ margin: 0 }}>
               详情图生成
@@ -51,20 +50,34 @@ const DashboardPage = () => {
             </Space>
           </Space>
         </Card>
-        <Card
-          className="module-card"
-          onClick={() => navigate('/modules/video-copy')}
-        >
+
+        <Card className="module-card" onClick={() => navigate('/modules/video-copy')}>
           <Space direction="vertical" size={8}>
             <Typography.Title level={5} style={{ margin: 0 }}>
               视频提取文案
             </Typography.Title>
             <Typography.Text type="secondary">
-              上传视频自动生成文案
+              支持视频 URL / 本地上传双模式
             </Typography.Text>
             <Space size={8}>
               <Tag>视频</Tag>
-              <Tag>上传</Tag>
+              <Tag>识别</Tag>
+              <Tag>文案</Tag>
+            </Space>
+          </Space>
+        </Card>
+
+        <Card className="module-card" onClick={() => navigate('/modules/product-copy')}>
+          <Space direction="vertical" size={8}>
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              产品文案生成
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              输入产品信息与模板，生成营销文案
+            </Typography.Text>
+            <Space size={8}>
+              <Tag>产品</Tag>
+              <Tag>模板</Tag>
               <Tag>文案</Tag>
             </Space>
           </Space>
