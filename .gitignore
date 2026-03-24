@@ -1,38 +1,49 @@
-# env
-.env
-.env.*
-!.env.example
-api/.env
-web/.env
+# OS
+.DS_Store
+Thumbs.db
 
-# dependencies
-node_modules/
-api/node_modules/
-web/node_modules/
-
-# build outputs
-dist/
-build/
-coverage/
-api/dist/
-web/dist/
-
-# vite cache
-.vite/
-web/.vite/
-web/node_modules/.vite/
-
-# logs
+# Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
+yarn-error.log*
 pnpm-debug.log*
 
-# OS/editor
-.DS_Store
-Thumbs.db
+# Env files (do NOT commit secrets)
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+api/.env
+api/.env.*
+
+# Node modules
+node_modules/
+web/node_modules/
+api/node_modules/
+
+# Vite / build cache
+web/node_modules/.vite/
+web/dist/
+api/dist/
+*.tsbuildinfo
+
+# IDE
 .vscode/
 .idea/
+.cursor/
 
-# temp scripts/output
-_backup_local/
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Runtime/data
+pids/
+*.pid
+
+# Optional lock files at repo root if accidental
+/package-lock.json
+/yarn.lock
+/pnpm-lock.yaml
