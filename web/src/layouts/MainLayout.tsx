@@ -9,6 +9,7 @@ import {
   UnorderedListOutlined,
   FileTextOutlined,
   SoundOutlined,
+  GlobalOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -49,6 +50,11 @@ const MainLayout = () => {
       label: <NavLink to="/modules/product-copy">产品文案生成</NavLink>,
     },
     {
+      key: '/modules/translation',
+      icon: <GlobalOutlined />,
+      label: <NavLink to="/modules/translation">翻译功能</NavLink>,
+    },
+    {
       key: '/modules/voice-generator',
       icon: <SoundOutlined />,
       label: <NavLink to="/modules/voice-generator">语音生成</NavLink>,
@@ -62,7 +68,7 @@ const MainLayout = () => {
           <Typography.Title level={4} style={{ margin: 0 }}>
             Coze 工作台
           </Typography.Title>
-          <Typography.Text type="secondary">内网功能集成 · v1.2.0</Typography.Text>
+          <Typography.Text type="secondary">内网功能集成 · v1.4.0</Typography.Text>
         </div>
         <Menu mode="inline" selectedKeys={[location.pathname]} items={menuItems} />
       </Sider>
