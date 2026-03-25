@@ -4,9 +4,24 @@ import { config } from '../config';
 
 const router = Router();
 
+const getVoiceBaseUrl = () => {
+  // 兼容旧代码未更新 config.ts 的情况，优先读 config，再兜底读 process.env
+  const raw = config.voiceBaseUrl || process.env.VOICE_BASE_URL;
+  if (!raw) return '';
+  return raw.replace(/\/+$/, '');
+};
+
 /** 前端读取语音服务配置（用于显示按钮/iframe） */
 router.get('/config', authRequired, (_req: Request, res: Response) => {
-  const base = config.voiceBaseUrl.replace(/\/+$/, '');
+  const base = getVoiceBaseUrl();
+
+  if (!base) {
+    return res.status(500).json({
+      success: false,
+      message: 'VOICE_BASE_URL 未配置，请检查 api/.env 或 config.ts',
+    });
+  }
+
   return res.json({
     success: true,
     data: {
@@ -18,15 +33,22 @@ router.get('/config', authRequired, (_req: Request, res: Response) => {
 });
 
 /**
- * 服务器端代理调用 TTS API（示例）
- * 你后续只需要把 body 里的 payload 转发到 gradio 对应接口
+ * 服务器端代理调用 TTS API
+ * path 示例：/run/predict 或 gradio API Recorder 生成的实际 path
  */
 router.post('/proxy', authRequired, async (req: Request, res: Response) => {
   try {
-    const base = config.voiceBaseUrl.replace(/\/+$/, '');
+    const base = getVoiceBaseUrl();
+    if (!base) {
+      return res.status(500).json({
+        success: false,
+        message: 'VOICE_BASE_URL 未配置，请检查 api/.env 或 config.ts',
+      });
+    }
+
     const { path, payload } = req.body as {
-      path: string; // 例如 "/run/predict" 或你 gradio recorder 生成的真实 endpoint
-      payload: unknown;
+      path?: string;
+      payload?: unknown;
     };
 
     if (!path) {
@@ -40,8 +62,12 @@ router.post('/proxy', authRequired, async (req: Request, res: Response) => {
     });
 
     const text = await response.text();
+
     if (!response.ok) {
-      return res.status(500).json({ success: false, message: text });
+      return res.status(500).json({
+        success: false,
+        message: text || `语音服务返回错误: ${response.status}`,
+      });
     }
 
     try {
@@ -56,4 +82,4 @@ router.post('/proxy', authRequired, async (req: Request, res: Response) => {
   }
 });
 
-export default router;
+export default router;s
