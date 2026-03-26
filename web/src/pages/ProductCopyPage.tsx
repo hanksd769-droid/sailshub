@@ -1,12 +1,13 @@
-import { Button, Card, Form, Input, Select, Space, Typography, message } from 'antd';
+import { Alert, Button, Card, Form, Input, Select, Space, Typography, message } from 'antd';
 import { useState } from 'react';
 import ResultPanel from '../components/ResultPanel';
-import { runWorkflowStream } from '../lib/api';
+import { generateVoiceFromCopy, runWorkflowStream } from '../lib/api';
 
 const templateOptions = [
   { label: '知识科普', value: '知识科普' },
   { label: '种草推荐', value: '种草推荐' },
   { label: '直播带货', value: '直播带货' },
+  { label: '强对比', value: '强对比' },
 ];
 
 const ProductCopyPage = () => {
@@ -15,7 +16,43 @@ const ProductCopyPage = () => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [errorText, setErrorText] = useState('');
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceResultText, setVoiceResultText] = useState('');
+  const [voiceResultJson, setVoiceResultJson] = useState('');
   const [form] = Form.useForm();
+
+  const handleGenerateVoice = async () => {
+    if (!streamText.trim()) {
+      message.warning('请先生成文案，再执行文案生成语音');
+      return;
+    }
+
+    setVoiceLoading(true);
+    setVoiceResultText('');
+    setVoiceResultJson('');
+
+    try {
+      const result = await generateVoiceFromCopy(streamText);
+      const translated = result.data.translated || '';
+      const lines = result.data.lines || [];
+
+      setVoiceResultText([
+        '英文翻译：',
+        translated,
+        '',
+        '逐句分行（TXT内容）：',
+        ...lines,
+      ].join('\n'));
+      setVoiceResultJson(JSON.stringify(result.data, null, 2));
+      message.success('语音任务已提交（批量处理 + 导出 SRT）');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '语音生成失败';
+      message.error(msg);
+      setVoiceResultText(`语音生成失败：${msg}`);
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
@@ -49,11 +86,12 @@ const ProductCopyPage = () => {
           };
 
           if (eventObj.event === 'Message' && eventObj.data?.content) {
+            const content = eventObj.data.content;
             try {
-              const parsed = JSON.parse(eventObj.data.content) as { output?: string };
-              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${parsed.output ?? eventObj.data.content}`);
+              const parsed = JSON.parse(content) as { output?: string };
+              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${parsed.output || content}`);
             } catch {
-              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${eventObj.data.content}`);
+              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${content}`);
             }
           }
         },
@@ -116,11 +154,23 @@ const ProductCopyPage = () => {
               <Select options={templateOptions} placeholder="请选择模板" />
             </Form.Item>
 
-            <Button type="primary" loading={loading} onClick={handleSubmit}>
-              开始生成
-            </Button>
+            <Space>
+              <Button type="primary" loading={loading} onClick={handleSubmit}>
+                开始生成
+              </Button>
+              <Button loading={voiceLoading} onClick={handleGenerateVoice}>
+                文案生成语音（英译+分句+SRT）
+              </Button>
+            </Space>
           </Form>
         </Card>
+
+        <Alert
+          type="info"
+          showIcon
+          message="语音子功能说明"
+          description="点击“文案生成语音”后，会自动将产品文案翻译成英文，按一句一行生成 TXT，并调用语音服务进行批量处理及导出 SRT。"
+        />
 
         <ResultPanel
           title="生成结果"
@@ -131,6 +181,16 @@ const ProductCopyPage = () => {
           errorText={errorText}
           onCopyText={() => navigator.clipboard.writeText(streamText)}
           onCopyJson={() => navigator.clipboard.writeText(jsonText)}
+        />
+
+        <ResultPanel
+          title="语音任务结果（MP3+SRT）"
+          streamText={voiceResultText || '等待语音任务输出...'}
+          jsonText={voiceResultJson}
+          loading={voiceLoading}
+          progress={voiceLoading ? 60 : 100}
+          onCopyText={() => navigator.clipboard.writeText(voiceResultText)}
+          onCopyJson={() => navigator.clipboard.writeText(voiceResultJson)}
         />
       </Space>
     </div>

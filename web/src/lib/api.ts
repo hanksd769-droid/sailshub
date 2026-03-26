@@ -141,3 +141,18 @@ export const getVoiceConfig = async () => {
     };
   }>('/api/voice/config');
 };
+
+export const generateVoiceFromCopy = async (text: string) => {
+  return apiFetch<{
+    success: boolean;
+    data: {
+      translated: string;
+      lines: string[];
+      txt: string;
+      tts: unknown;
+    };
+  }>('/api/voice/generate-from-copy', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+};
