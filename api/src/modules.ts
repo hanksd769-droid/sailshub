@@ -11,13 +11,18 @@ export const modules = {
   },
   'video-copy': {
     key: 'video-copy',
-    name: '提取视频文案',
+    name: '视频提取文案',
     workflowId: '7569800959866617871',
   },
   'product-copy': {
     key: 'product-copy',
     name: '产品文案生成',
     workflowId: '7543166210068185138',
+  },
+  'translation': {
+    key: 'translation',
+    name: '翻译功能',
+    workflowId: '7555334081739948071',
   },
 } as const;
 
