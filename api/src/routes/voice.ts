@@ -8,7 +8,6 @@ import { modules } from '../modules';
 const router = Router();
 
 const getVoiceBaseUrl = () => {
-  // 兼容旧代码未更新 config.ts 的情况，优先读 config，再兜底读 process.env
   const raw = config.voiceBaseUrl || process.env.VOICE_BASE_URL;
   if (!raw) return '';
   return raw.replace(/\/+$/, '');
@@ -45,10 +44,26 @@ const splitSentences = (text: string) => {
 
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
+const pickTextFromUnknown = (value: unknown): string => {
+  if (typeof value === 'string') return value.trim();
+  if (!value || typeof value !== 'object') return '';
+
+  const obj = value as Record<string, unknown>;
+  const candidates = [obj.output, obj.result, obj.text, obj.content, obj.translation];
+
+  for (const item of candidates) {
+    if (typeof item === 'string' && item.trim()) {
+      return item.trim();
+    }
+  }
+
+  return '';
+};
+
 const getTranslationText = async (text: string) => {
   const moduleInfo = modules.translation;
   if (!moduleInfo) {
-    throw new Error('翻译模块未配置');
+    throw new Error('翻译模块未配置，请先在 modules.ts 增加 translation');
   }
 
   const stream = await cozeClient.workflows.runs.stream({
@@ -60,34 +75,44 @@ const getTranslationText = async (text: string) => {
   });
 
   let output = '';
+
   for await (const chunk of stream) {
-    const maybeEvent = chunk as { event?: string; data?: { content?: string } };
-    if (maybeEvent.event === 'Message' && maybeEvent.data?.content) {
+    const c = chunk as Record<string, unknown>;
+
+    // 1) 尝试从常见字段直接取文本
+    output = output || pickTextFromUnknown(c.data) || pickTextFromUnknown(c);
+
+    // 2) data.content 可能是 JSON 字符串
+    const content = (c.data as Record<string, unknown> | undefined)?.content;
+    if (!output && typeof content === 'string' && content.trim()) {
       try {
-        const parsed = JSON.parse(maybeEvent.data.content) as {
-          output?: string;
-          result?: string;
-          text?: string;
-        };
-        output = parsed.output || parsed.result || parsed.text || maybeEvent.data.content;
+        const parsed = JSON.parse(content) as Record<string, unknown>;
+        output = pickTextFromUnknown(parsed) || content.trim();
       } catch {
-        output = maybeEvent.data.content;
+        output = content.trim();
       }
     }
   }
 
-  if (!output) {
-    throw new Error('翻译服务未返回内容');
-  }
-
-  return output;
+  // 避免整个链路失败：翻译拿不到时回退原文继续做 TTS
+  return output || text;
 };
 
+/**
+ * 这里按你截图中 API 结构做“批量处理 + 导出SRT”调用示例：
+ * 1) 上传 txt 文件
+ * 2) 调用 run/predict（参数按你给的 /lambda /lambda_1 语义）
+ *
+ * 注意：不同版本 ChatTTS 的上传/预测接口路径可能不同，
+ * 如果报错，请把 /view=api 中 Javascript snippet 发我，我再精准对齐。
+ */
 const callTtsBatch = async (base: string, fileBuffer: Buffer, filename: string) => {
+  // 1) 上传 TXT（你截图里有“上传TXT,SRT文件”）
   const form = new FormData();
+  // 后端 Node 环境使用 form-data，需要 filename
   form.append('files', fileBuffer, { filename });
 
-  const response = await fetch(`${base}/upload`, {
+  const uploadResp = await fetch(`${base}/upload`, {
     method: 'POST',
     headers: {
       ...form.getHeaders(),
@@ -95,37 +120,39 @@ const callTtsBatch = async (base: string, fileBuffer: Buffer, filename: string) 
     body: form as unknown as BodyInit,
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || '上传 txt 失败');
+  if (!uploadResp.ok) {
+    const text = await uploadResp.text();
+    throw new Error(`上传 TXT 失败: ${text || uploadResp.status}`);
   }
 
-  const uploadData = await response.json();
+  const uploadData = await uploadResp.json();
 
+  // 2) 触发批量处理 + 导出SRT
+  // data 含义按你截图：
+  // [0] 批量处理(bool)
+  // [1] 上传TXT文件(List[filepath] / 上传返回对象)
+  // [2] 启用文本切分(bool)
+  // [3] 合成成段音频(bool)
+  // [4] 导出Srt(bool)
   const predictPayload = {
-    data: [
-      true,
-      uploadData,
-      true,
-      true,
-      true,
-    ],
+    data: [true, uploadData, true, true, true],
   };
 
-  const predictRes = await fetch(`${base}/run/predict`, {
+  const predictResp = await fetch(`${base}/run/predict`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(predictPayload),
   });
 
-  if (!predictRes.ok) {
-    const text = await predictRes.text();
-    throw new Error(text || '语音生成失败');
+  if (!predictResp.ok) {
+    const text = await predictResp.text();
+    throw new Error(`语音生成失败: ${text || predictResp.status}`);
   }
 
-  return predictRes.json();
+  return predictResp.json();
 };
 
+/** 文案 -> 英译 -> 逐句TXT -> TTS批量+SRT */
 router.post('/generate-from-copy', authRequired, async (req: Request, res: Response) => {
   try {
     const base = getVoiceBaseUrl();
@@ -137,7 +164,7 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
     }
 
     const { text } = req.body as { text?: string };
-    if (!text) {
+    if (!text || !text.trim()) {
       return res.status(400).json({ success: false, message: '缺少文案内容' });
     }
 
@@ -148,7 +175,7 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
     const txtBuffer = Buffer.from(txtContent, 'utf-8');
     const filename = `voice-${Date.now()}.txt`;
 
-    const ttsResponse = await callTtsBatch(base, txtBuffer, filename);
+    const tts = await callTtsBatch(base, txtBuffer, filename);
 
     return res.json({
       success: true,
@@ -156,7 +183,7 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
         translated,
         lines,
         txt: txtContent,
-        tts: ttsResponse,
+        tts, // 这里通常会带 mp3/srt 路径或任务信息
       },
     });
   } catch (error) {
@@ -165,10 +192,7 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
   }
 });
 
-/**
- * 服务器端代理调用 TTS API
- * path 示例：/run/predict 或 gradio API Recorder 生成的实际 path
- */
+/** 通用代理（可继续用于调试任意 api_name） */
 router.post('/proxy', authRequired, async (req: Request, res: Response) => {
   try {
     const base = getVoiceBaseUrl();
@@ -179,11 +203,7 @@ router.post('/proxy', authRequired, async (req: Request, res: Response) => {
       });
     }
 
-    const { path, payload } = req.body as {
-      path?: string;
-      payload?: unknown;
-    };
-
+    const { path, payload } = req.body as { path?: string; payload?: unknown };
     if (!path) {
       return res.status(400).json({ success: false, message: '缺少 path' });
     }

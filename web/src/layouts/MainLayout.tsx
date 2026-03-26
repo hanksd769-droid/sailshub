@@ -24,41 +24,13 @@ const MainLayout = () => {
   };
 
   const menuItems = [
-    {
-      key: '/dashboard',
-      icon: <AppstoreOutlined />,
-      label: <NavLink to="/dashboard">功能首页</NavLink>,
-    },
-    {
-      key: '/runs',
-      icon: <UnorderedListOutlined />,
-      label: <NavLink to="/runs">我的任务</NavLink>,
-    },
-    {
-      key: '/modules/detail-image',
-      icon: <PictureOutlined />,
-      label: <NavLink to="/modules/detail-image">详情图生成</NavLink>,
-    },
-    {
-      key: '/modules/video-copy',
-      icon: <VideoCameraOutlined />,
-      label: <NavLink to="/modules/video-copy">视频提取文案</NavLink>,
-    },
-    {
-      key: '/modules/product-copy',
-      icon: <FileTextOutlined />,
-      label: <NavLink to="/modules/product-copy">产品文案生成</NavLink>,
-    },
-    {
-      key: '/modules/translation',
-      icon: <GlobalOutlined />,
-      label: <NavLink to="/modules/translation">翻译功能</NavLink>,
-    },
-    {
-      key: '/modules/voice-generator',
-      icon: <SoundOutlined />,
-      label: <NavLink to="/modules/voice-generator">语音生成</NavLink>,
-    },
+    { key: '/dashboard', icon: <AppstoreOutlined />, label: <NavLink to="/dashboard">功能首页</NavLink> },
+    { key: '/runs', icon: <UnorderedListOutlined />, label: <NavLink to="/runs">我的任务</NavLink> },
+    { key: '/modules/detail-image', icon: <PictureOutlined />, label: <NavLink to="/modules/detail-image">详情图生成</NavLink> },
+    { key: '/modules/video-copy', icon: <VideoCameraOutlined />, label: <NavLink to="/modules/video-copy">视频提取文案</NavLink> },
+    { key: '/modules/product-copy', icon: <FileTextOutlined />, label: <NavLink to="/modules/product-copy">产品文案生成</NavLink> },
+    { key: '/modules/translation', icon: <GlobalOutlined />, label: <NavLink to="/modules/translation">翻译功能</NavLink> },
+    { key: '/modules/voice-generator', icon: <SoundOutlined />, label: <NavLink to="/modules/voice-generator">语音生成</NavLink> },
   ];
 
   return (
@@ -68,7 +40,7 @@ const MainLayout = () => {
           <Typography.Title level={4} style={{ margin: 0 }}>
             Coze 工作台
           </Typography.Title>
-          <Typography.Text type="secondary">内网功能集成 · v1.4.0</Typography.Text>
+          <Typography.Text type="secondary">内网功能集成 · v1.6.0</Typography.Text>
         </div>
         <Menu mode="inline" selectedKeys={[location.pathname]} items={menuItems} />
       </Sider>
@@ -78,9 +50,7 @@ const MainLayout = () => {
           <Space style={{ float: 'right' }}>
             <Avatar icon={<UserOutlined />} />
             <Typography.Text>管理员</Typography.Text>
-            <Button type="link" onClick={handleLogout}>
-              退出登录
-            </Button>
+            <Button type="link" onClick={handleLogout}>退出登录</Button>
           </Space>
         </Header>
 
