@@ -1,3 +1,4 @@
+console.log('APP_FROM_E_WEB_WEB');
 import { Route, Routes, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import AuthLayout from './layouts/AuthLayout';
@@ -8,6 +9,7 @@ import DashboardPage from './pages/DashboardPage';
 import DetailImagePage from './pages/DetailImagePage';
 import VideoCopyPage from './pages/VideoCopyPage';
 import ProductCopyPage from './pages/ProductCopyPage';
+import TranslationPage from './pages/TranslationPage';
 import VoiceGeneratorPage from './pages/VoiceGeneratorPage';
 import RunsPage from './pages/RunsPage';
 import { apiFetch, clearToken, getToken, setUnauthorizedHandler } from './lib/api';
@@ -56,6 +58,7 @@ const AppRoutes = () => {
         <Route path="/modules/detail-image" element={<DetailImagePage />} />
         <Route path="/modules/video-copy" element={<VideoCopyPage />} />
         <Route path="/modules/product-copy" element={<ProductCopyPage />} />
+        <Route path="/modules/translation" element={<TranslationPage />} />
         <Route path="/modules/voice-generator" element={<VoiceGeneratorPage />} />
       </Route>
     </Routes>
