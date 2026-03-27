@@ -1,5 +1,4 @@
 import { Router, type Request, type Response } from 'express';
-import FormData from 'form-data';
 import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
@@ -13,7 +12,7 @@ const getVoiceBaseUrl = () => {
   return raw.replace(/\/+$/, '');
 };
 
-/** 前端读取语音服务配置（用于显示按钮/iframe） */
+/** 前端读取语音服务配置（用于显示按钮） */
 router.get('/config', authRequired, (_req: Request, res: Response) => {
   const base = getVoiceBaseUrl();
 
@@ -79,10 +78,8 @@ const getTranslationText = async (text: string) => {
   for await (const chunk of stream) {
     const c = chunk as Record<string, unknown>;
 
-    // 1) 尝试从常见字段直接取文本
     output = output || pickTextFromUnknown(c.data) || pickTextFromUnknown(c);
 
-    // 2) data.content 可能是 JSON 字符串
     const content = (c.data as Record<string, unknown> | undefined)?.content;
     if (!output && typeof content === 'string' && content.trim()) {
       try {
@@ -94,30 +91,40 @@ const getTranslationText = async (text: string) => {
     }
   }
 
-  // 避免整个链路失败：翻译拿不到时回退原文继续做 TTS
+  // 翻译拿不到时回退原文，保证后续 TTS 不中断
   return output || text;
 };
 
-/**
- * 这里按你截图中 API 结构做“批量处理 + 导出SRT”调用示例：
- * 1) 上传 txt 文件
- * 2) 调用 run/predict（参数按你给的 /lambda /lambda_1 语义）
- *
- * 注意：不同版本 ChatTTS 的上传/预测接口路径可能不同，
- * 如果报错，请把 /view=api 中 Javascript snippet 发我，我再精准对齐。
- */
+const callPredict = async (base: string, apiName: string, value: unknown) => {
+  const response = await fetch(`${base}/predict`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: [value], api_name: apiName }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`调用 ${apiName} 失败: ${text || response.status}`);
+  }
+
+  return response.json();
+};
+
 const callTtsBatch = async (base: string, fileBuffer: Buffer, filename: string) => {
-  // 1) 上传 TXT（你截图里有“上传TXT,SRT文件”）
+  // 1) 设置批量处理
+  await callPredict(base, '/lambda', true);
+
+  // 2) 设置导出 SRT
+  await callPredict(base, '/lambda_1', true);
+
+  // 3) 上传 TXT 文件到 gradio
   const form = new FormData();
-  // 后端 Node 环境使用 form-data，需要 filename
-  form.append('files', fileBuffer, { filename });
+  const blob = new Blob([fileBuffer], { type: 'text/plain' });
+  form.append('files', blob, filename);
 
   const uploadResp = await fetch(`${base}/upload`, {
     method: 'POST',
-    headers: {
-      ...form.getHeaders(),
-    },
-    body: form as unknown as BodyInit,
+    body: form,
   });
 
   if (!uploadResp.ok) {
@@ -127,29 +134,31 @@ const callTtsBatch = async (base: string, fileBuffer: Buffer, filename: string) 
 
   const uploadData = await uploadResp.json();
 
-  // 2) 触发批量处理 + 导出SRT
-  // data 含义按你截图：
-  // [0] 批量处理(bool)
-  // [1] 上传TXT文件(List[filepath] / 上传返回对象)
-  // [2] 启用文本切分(bool)
-  // [3] 合成成段音频(bool)
-  // [4] 导出Srt(bool)
-  const predictPayload = {
-    data: [true, uploadData, true, true, true],
-  };
-
-  const predictResp = await fetch(`${base}/run/predict`, {
+  // 4) 绑定上传文件到“上传TXT、SRT文件”组件
+  const bindFileResp = await fetch(`${base}/predict`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(predictPayload),
+    body: JSON.stringify({ data: [uploadData], api_name: '/lambda_2' }),
   });
 
-  if (!predictResp.ok) {
-    const text = await predictResp.text();
-    throw new Error(`语音生成失败: ${text || predictResp.status}`);
+  if (!bindFileResp.ok) {
+    const text = await bindFileResp.text();
+    throw new Error(`绑定上传文件失败: ${text || bindFileResp.status}`);
   }
 
-  return predictResp.json();
+  // 5) 执行生成
+  const generateResp = await fetch(`${base}/predict`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: [], api_name: '/generate_audio' }),
+  });
+
+  if (!generateResp.ok) {
+    const text = await generateResp.text();
+    throw new Error(`语音生成失败: ${text || generateResp.status}`);
+  }
+
+  return generateResp.json();
 };
 
 /** 文案 -> 英译 -> 逐句TXT -> TTS批量+SRT */
@@ -183,7 +192,7 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
         translated,
         lines,
         txt: txtContent,
-        tts, // 这里通常会带 mp3/srt 路径或任务信息
+        tts,
       },
     });
   } catch (error) {
@@ -192,7 +201,7 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
   }
 });
 
-/** 通用代理（可继续用于调试任意 api_name） */
+/** 通用代理（用于调试任意 api_name） */
 router.post('/proxy', authRequired, async (req: Request, res: Response) => {
   try {
     const base = getVoiceBaseUrl();
@@ -203,7 +212,11 @@ router.post('/proxy', authRequired, async (req: Request, res: Response) => {
       });
     }
 
-    const { path, payload } = req.body as { path?: string; payload?: unknown };
+    const { path, payload } = req.body as {
+      path?: string;
+      payload?: unknown;
+    };
+
     if (!path) {
       return res.status(400).json({ success: false, message: '缺少 path' });
     }
