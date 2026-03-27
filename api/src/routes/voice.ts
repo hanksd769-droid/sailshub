@@ -96,69 +96,106 @@ const getTranslationText = async (text: string) => {
 };
 
 const callPredict = async (base: string, apiName: string, value: unknown) => {
-  const response = await fetch(`${base}/predict`, {
+  const normalized = apiName.startsWith('/') ? apiName.slice(1) : apiName;
+  const namesToTry = [apiName, normalized];
+  const pathsToTry = ['/predict', '/run/predict', '/api/predict'];
+
+  let lastErr = '';
+
+  for (const path of pathsToTry) {
+    for (const name of namesToTry) {
+      try {
+        const response = await fetch(`${base}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: [value], api_name: name }),
+        });
+
+        const text = await response.text();
+        if (!response.ok) {
+          lastErr = `${path} api_name=${name} -> ${text || response.status}`;
+          continue;
+        }
+
+        try {
+          return JSON.parse(text);
+        } catch {
+          return { data: text };
+        }
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
+      }
+    }
+  }
+
+  throw new Error(`调用 ${apiName} 失败: ${lastErr || 'No compatible endpoint found'}`);
+};
+
+const callGenerateAudio = async (base: string) => {
+  const pathsToTry = ['/predict', '/run/predict', '/api/predict'];
+  let lastErr = '';
+
+  for (const path of pathsToTry) {
+    try {
+      const response = await fetch(`${base}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: [], api_name: '/generate_audio' }),
+      });
+
+      const text = await response.text();
+      if (!response.ok) {
+        lastErr = `${path} /generate_audio -> ${text || response.status}`;
+        continue;
+      }
+
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { data: text };
+      }
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  throw new Error(`调用 /generate_audio 失败: ${lastErr || 'No compatible endpoint found'}`);
+};
+
+const uploadTxtFile = async (base: string, fileBuffer: Buffer, filename: string) => {
+  const form = new FormData();
+  const blob = new Blob([fileBuffer], { type: 'text/plain' });
+  // 你文档里是单文件 value；字段名这里尝试 files
+  form.append('files', blob, filename);
+
+  const response = await fetch(`${base}/upload`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: [value], api_name: apiName }),
+    body: form,
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`调用 ${apiName} 失败: ${text || response.status}`);
+    throw new Error(`上传 TXT 失败: ${text || response.status}`);
   }
 
   return response.json();
 };
 
 const callTtsBatch = async (base: string, fileBuffer: Buffer, filename: string) => {
-  // 1) 设置批量处理
+  // 1) 打开批量处理
   await callPredict(base, '/lambda', true);
 
-  // 2) 设置导出 SRT
+  // 2) 打开导出SRT
   await callPredict(base, '/lambda_1', true);
 
-  // 3) 上传 TXT 文件到 gradio
-  const form = new FormData();
-  const blob = new Blob([fileBuffer], { type: 'text/plain' });
-  form.append('files', blob, filename);
+  // 3) 上传TXT
+  const uploadData = await uploadTxtFile(base, fileBuffer, filename);
 
-  const uploadResp = await fetch(`${base}/upload`, {
-    method: 'POST',
-    body: form,
-  });
-
-  if (!uploadResp.ok) {
-    const text = await uploadResp.text();
-    throw new Error(`上传 TXT 失败: ${text || uploadResp.status}`);
-  }
-
-  const uploadData = await uploadResp.json();
-
-  // 4) 绑定上传文件到“上传TXT、SRT文件”组件
-  const bindFileResp = await fetch(`${base}/predict`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: [uploadData], api_name: '/lambda_2' }),
-  });
-
-  if (!bindFileResp.ok) {
-    const text = await bindFileResp.text();
-    throw new Error(`绑定上传文件失败: ${text || bindFileResp.status}`);
-  }
+  // 4) 把上传结果绑定到“上传TXT、SRT文件”
+  await callPredict(base, '/lambda_2', uploadData);
 
   // 5) 执行生成
-  const generateResp = await fetch(`${base}/predict`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: [], api_name: '/generate_audio' }),
-  });
-
-  if (!generateResp.ok) {
-    const text = await generateResp.text();
-    throw new Error(`语音生成失败: ${text || generateResp.status}`);
-  }
-
-  return generateResp.json();
+  return callGenerateAudio(base);
 };
 
 /** 文案 -> 英译 -> 逐句TXT -> TTS批量+SRT */
