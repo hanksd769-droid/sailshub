@@ -36,13 +36,9 @@ const ProductCopyPage = () => {
       const translated = result.data.translated || '';
       const lines = result.data.lines || [];
 
-      setVoiceResultText([
-        '英文翻译：',
-        translated,
-        '',
-        '逐句分行（TXT内容）：',
-        ...lines,
-      ].join('\n'));
+      setVoiceResultText(
+        ['英文翻译：', translated, '', '逐句分行（TXT内容）：', ...lines].join('\n')
+      );
       setVoiceResultJson(JSON.stringify(result.data, null, 2));
       message.success('语音任务已提交（批量处理 + 导出 SRT）');
     } catch (error) {

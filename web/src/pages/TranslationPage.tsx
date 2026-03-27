@@ -48,10 +48,7 @@ const TranslationPage = () => {
             return;
           }
 
-          const eventObj = data as {
-            event?: string;
-            data?: { content?: string };
-          };
+          const eventObj = data as { event?: string; data?: { content?: string } };
 
           if (eventObj.event === 'Message' && eventObj.data?.content) {
             const content = eventObj.data.content;

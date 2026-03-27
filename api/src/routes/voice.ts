@@ -3,6 +3,10 @@ import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
 import { modules } from '../modules';
+import { Client, handle_file } from '@gradio/client';
+import { promises as fs } from 'fs';
+import os from 'os';
+import path from 'path';
 
 const router = Router();
 
@@ -33,37 +37,29 @@ router.get('/config', authRequired, (_req: Request, res: Response) => {
   });
 });
 
-const splitSentences = (text: string) => {
-  return text
+const splitSentences = (text: string) =>
+  text
     .replace(/\r\n/g, '\n')
     .split(/\n|(?<=[。！？!?])\s*/)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-};
+    .map((s) => s.trim())
+    .filter(Boolean);
 
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
 const pickTextFromUnknown = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (!value || typeof value !== 'object') return '';
-
   const obj = value as Record<string, unknown>;
   const candidates = [obj.output, obj.result, obj.text, obj.content, obj.translation];
-
-  for (const item of candidates) {
-    if (typeof item === 'string' && item.trim()) {
-      return item.trim();
-    }
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c.trim();
   }
-
   return '';
 };
 
 const getTranslationText = async (text: string) => {
   const moduleInfo = modules.translation;
-  if (!moduleInfo) {
-    throw new Error('翻译模块未配置，请先在 modules.ts 增加 translation');
-  }
+  if (!moduleInfo) throw new Error('翻译模块未配置，请先在 modules.ts 增加 translation');
 
   const stream = await cozeClient.workflows.runs.stream({
     workflow_id: moduleInfo.workflowId,
@@ -74,10 +70,8 @@ const getTranslationText = async (text: string) => {
   });
 
   let output = '';
-
   for await (const chunk of stream) {
     const c = chunk as Record<string, unknown>;
-
     output = output || pickTextFromUnknown(c.data) || pickTextFromUnknown(c);
 
     const content = (c.data as Record<string, unknown> | undefined)?.content;
@@ -91,111 +85,55 @@ const getTranslationText = async (text: string) => {
     }
   }
 
-  // 翻译拿不到时回退原文，保证后续 TTS 不中断
   return output || text;
 };
 
-const callPredict = async (base: string, apiName: string, value: unknown) => {
-  const normalized = apiName.startsWith('/') ? apiName.slice(1) : apiName;
-  const namesToTry = [apiName, normalized];
-  const pathsToTry = ['/predict', '/run/predict', '/api/predict'];
+const callTtsBatch = async (base: string, txtContent: string) => {
+  // 用官方 gradio client，避免手动 /predict 出现内部错误
+  const client = await Client.connect(base);
 
-  let lastErr = '';
+  // 写临时 txt
+  const tmpFile = path.join(os.tmpdir(), `voice-${Date.now()}.txt`);
+  await fs.writeFile(tmpFile, txtContent, 'utf-8');
 
-  for (const path of pathsToTry) {
-    for (const name of namesToTry) {
-      try {
-        const response = await fetch(`${base}${path}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: [value], api_name: name }),
-        });
-
-        const text = await response.text();
-        if (!response.ok) {
-          lastErr = `${path} api_name=${name} -> ${text || response.status}`;
-          continue;
-        }
-
-        try {
-          return JSON.parse(text);
-        } catch {
-          return { data: text };
-        }
-      } catch (e) {
-        lastErr = e instanceof Error ? e.message : String(e);
-      }
-    }
-  }
-
-  throw new Error(`调用 ${apiName} 失败: ${lastErr || 'No compatible endpoint found'}`);
-};
-
-const callGenerateAudio = async (base: string) => {
-  const pathsToTry = ['/predict', '/run/predict', '/api/predict'];
-  let lastErr = '';
-
-  for (const path of pathsToTry) {
+  const logStep = (step: string, payload: unknown) => {
     try {
-      const response = await fetch(`${base}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: [], api_name: '/generate_audio' }),
-      });
-
-      const text = await response.text();
-      if (!response.ok) {
-        lastErr = `${path} /generate_audio -> ${text || response.status}`;
-        continue;
-      }
-
-      try {
-        return JSON.parse(text);
-      } catch {
-        return { data: text };
-      }
-    } catch (e) {
-      lastErr = e instanceof Error ? e.message : String(e);
+      console.log(`[voice][${step}]`, JSON.stringify(payload, null, 2));
+    } catch {
+      console.log(`[voice][${step}]`, payload);
     }
+  };
+
+  try {
+    logStep('start', { base, tmpFile, txtPreview: txtContent.slice(0, 200) });
+
+    // 1) 批量处理
+    const step1 = await client.predict('/lambda', { value: true });
+    logStep('lambda', step1);
+
+    // 2) 导出 SRT
+    const step2 = await client.predict('/lambda_1', { value: true });
+    logStep('lambda_1', step2);
+
+    // 3) 上传 TXT 到文件组件
+    const step3 = await client.predict('/lambda_2', { value: handle_file(tmpFile) });
+    logStep('lambda_2', step3);
+
+    // 4) 执行生成
+    const step4 = await client.predict('/generate_audio', {});
+    logStep('generate_audio', step4);
+
+    return step4?.data ?? step4;
+  } catch (error) {
+    logStep('error', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw error;
+  } finally {
+    // 清理临时文件
+    await fs.unlink(tmpFile).catch(() => {});
   }
-
-  throw new Error(`调用 /generate_audio 失败: ${lastErr || 'No compatible endpoint found'}`);
-};
-
-const uploadTxtFile = async (base: string, fileBuffer: Buffer, filename: string) => {
-  const form = new FormData();
-  const blob = new Blob([fileBuffer], { type: 'text/plain' });
-  // 你文档里是单文件 value；字段名这里尝试 files
-  form.append('files', blob, filename);
-
-  const response = await fetch(`${base}/upload`, {
-    method: 'POST',
-    body: form,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`上传 TXT 失败: ${text || response.status}`);
-  }
-
-  return response.json();
-};
-
-const callTtsBatch = async (base: string, fileBuffer: Buffer, filename: string) => {
-  // 1) 打开批量处理
-  await callPredict(base, '/lambda', true);
-
-  // 2) 打开导出SRT
-  await callPredict(base, '/lambda_1', true);
-
-  // 3) 上传TXT
-  const uploadData = await uploadTxtFile(base, fileBuffer, filename);
-
-  // 4) 把上传结果绑定到“上传TXT、SRT文件”
-  await callPredict(base, '/lambda_2', uploadData);
-
-  // 5) 执行生成
-  return callGenerateAudio(base);
 };
 
 /** 文案 -> 英译 -> 逐句TXT -> TTS批量+SRT */
@@ -216,71 +154,21 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
 
     const translated = await getTranslationText(text);
     const lines = splitSentences(translated);
-    const txtContent = buildTxtContent(lines);
+    const txt = buildTxtContent(lines);
 
-    const txtBuffer = Buffer.from(txtContent, 'utf-8');
-    const filename = `voice-${Date.now()}.txt`;
-
-    const tts = await callTtsBatch(base, txtBuffer, filename);
+    const tts = await callTtsBatch(base, txt);
 
     return res.json({
       success: true,
       data: {
         translated,
         lines,
-        txt: txtContent,
+        txt,
         tts,
       },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : '语音生成失败';
-    return res.status(500).json({ success: false, message });
-  }
-});
-
-/** 通用代理（用于调试任意 api_name） */
-router.post('/proxy', authRequired, async (req: Request, res: Response) => {
-  try {
-    const base = getVoiceBaseUrl();
-    if (!base) {
-      return res.status(500).json({
-        success: false,
-        message: 'VOICE_BASE_URL 未配置，请检查 api/.env 或 config.ts',
-      });
-    }
-
-    const { path, payload } = req.body as {
-      path?: string;
-      payload?: unknown;
-    };
-
-    if (!path) {
-      return res.status(400).json({ success: false, message: '缺少 path' });
-    }
-
-    const response = await fetch(`${base}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload ?? {}),
-    });
-
-    const text = await response.text();
-
-    if (!response.ok) {
-      return res.status(500).json({
-        success: false,
-        message: text || `语音服务返回错误: ${response.status}`,
-      });
-    }
-
-    try {
-      const data = JSON.parse(text);
-      return res.json({ success: true, data });
-    } catch {
-      return res.json({ success: true, data: text });
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '语音代理调用失败';
     return res.status(500).json({ success: false, message });
   }
 });

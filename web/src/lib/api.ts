@@ -101,7 +101,6 @@ export const runWorkflowStream = async (
 
       if (part.startsWith('event: error')) {
         if (hasDone) continue;
-
         const messageLine = part.split('\n').find((line) => line.startsWith('data: '));
         let message = messageLine ? messageLine.replace('data: ', '') : '运行失败';
         try {
