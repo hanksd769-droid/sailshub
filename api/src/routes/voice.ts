@@ -78,7 +78,6 @@ const normalizeTranslatedText = (raw: string): string => {
 
 /** 仅提取 wenan_Array_string */
 const extractWenanArrayOnly = (raw: string): string[] => {
-  // 1) 整体 JSON
   try {
     const obj = JSON.parse(raw) as Record<string, unknown>;
     const arr = obj.wenan_Array_string;
@@ -89,7 +88,6 @@ const extractWenanArrayOnly = (raw: string): string[] => {
     // ignore
   }
 
-  // 2) 从字符串内截取
   const match = raw.match(/"wenan_Array_string"\s*:\s*(\[[\s\S]*?\])/);
   if (match?.[1]) {
     try {
@@ -103,7 +101,7 @@ const extractWenanArrayOnly = (raw: string): string[] => {
   return [];
 };
 
-/** 逐句翻译为英文，返回纯文本数组（每项一行） */
+/** 逐句翻译为英文，输出纯文本数组（每项一行） */
 const translateLinesToEnglish = async (lines: string[]) => {
   const moduleInfo = modules.translation;
   if (!moduleInfo) throw new Error('翻译模块未配置');
@@ -126,7 +124,7 @@ const translateLinesToEnglish = async (lines: string[]) => {
       const dataObj = c.data as Record<string, unknown> | undefined;
       const content = dataObj?.content;
 
-      // 优先从 data.content JSON 里取 output/result/text
+      // 优先 data.content JSON
       if (typeof content === 'string' && content.trim()) {
         try {
           const parsed = JSON.parse(content) as Record<string, unknown>;
@@ -141,15 +139,14 @@ const translateLinesToEnglish = async (lines: string[]) => {
         }
       }
 
-      // 其次直接字段提取
+      // 其次直接字段
       const picked = pickTextFromUnknown(dataObj) || pickTextFromUnknown(c);
       if (picked) sentence = picked;
     }
 
-    sentence = normalizeTranslatedText(sentence || line);
-    sentence = sentence.replace(/\s+/g, ' ').trim();
+    sentence = normalizeTranslatedText(sentence || line).replace(/\s+/g, ' ').trim();
 
-    // 兜底：如果还是 JSON 壳，回退原句
+    // 兜底：仍是 JSON 壳则回退原句
     if (sentence.startsWith('{') || sentence.startsWith('[')) {
       sentence = line.trim();
     }
@@ -162,7 +159,6 @@ const translateLinesToEnglish = async (lines: string[]) => {
 
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
-/** 按你 API Recorder 录制流程调用 TTS */
 const callTtsBatch = async (base: string, txtContent: string) => {
   const client = await Client.connect(base);
 
@@ -178,30 +174,51 @@ const callTtsBatch = async (base: string, txtContent: string) => {
   };
 
   try {
-    logStep('start', { base, tmpFile, txtPreview: txtContent.slice(0, 300) });
+    logStep('start', {
+      base,
+      tmpFile,
+      txtPreview: txtContent.slice(0, 500),
+      txtLines: txtContent.split('\n').length,
+    });
 
-    // 1) 批量处理
-    logStep('lambda', await client.predict('/lambda', { value: true }));
+    // 1) 批量处理 + 导出SRT
+    const step1 = await client.predict('/lambda', { value: true });
+    logStep('lambda', step1);
 
-    // 2) 导出SRT
-    logStep('lambda_1', await client.predict('/lambda_1', { value: true }));
+    const step2 = await client.predict('/lambda_1', { value: true });
+    logStep('lambda_1', step2);
 
-    // 3) 上传TXT文件（必须是数组）
-    logStep('lambda_2', await client.predict('/lambda_2', { value: [handle_file(tmpFile)] }));
+    // 2) 文件方式绑定
+    let fileBindOk = true;
+    try {
+      const step3 = await client.predict('/lambda_2', {
+        value: [handle_file(tmpFile)], // ListFiles
+      });
+      logStep('lambda_2', step3);
+    } catch (e) {
+      fileBindOk = false;
+      logStep('lambda_2_error', {
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
 
-    // 4) 可选参数（按你录制最终值）
+    // 3) 兜底：直接写入“输入文字”
+    const stepText = await client.predict('/lambda_3', { value: txtContent });
+    logStep('lambda_3', { fileBindOk, result: stepText });
+
+    // 4) 参数（按录制最终值）
     logStep('lambda_4', await client.predict('/lambda_4', { value: true })); // 提炼文本
     logStep('lambda_5', await client.predict('/lambda_5', { value: 200 })); // 切分长度
-    logStep('lambda_14', await client.predict('/lambda_14', { value: 0 })); // oral
+    logStep('lambda_14', await client.predict('/lambda_14', { value: 0 }));
 
     logStep(
       'handle_enhance_audio_change',
       await client.predict('/handle_enhance_audio_change', { value: true })
     );
-    logStep('lambda_20', await client.predict('/lambda_20', { value: true })); // denoise
-    logStep('lambda_21', await client.predict('/lambda_21', { value: 'RK4' })); // ODE
-    logStep('lambda_22', await client.predict('/lambda_22', { value: 128 })); // CFM Number
-    logStep('lambda_23', await client.predict('/lambda_23', { value: 0.64 })); // CFM Temp
+    logStep('lambda_20', await client.predict('/lambda_20', { value: true }));
+    logStep('lambda_21', await client.predict('/lambda_21', { value: 'RK4' }));
+    logStep('lambda_22', await client.predict('/lambda_22', { value: 128 }));
+    logStep('lambda_23', await client.predict('/lambda_23', { value: 0.64 }));
 
     // 5) 生成
     const finalResult = await client.predict('/generate_audio', {});
@@ -219,10 +236,6 @@ const callTtsBatch = async (base: string, txtContent: string) => {
   }
 };
 
-/**
- * 输入：产品文案结果（包含 wenan_Array_string）
- * 输出：英文逐句 + txt + 调用TTS后的结果
- */
 router.post('/generate-from-copy', authRequired, async (req: Request, res: Response) => {
   try {
     const base = getVoiceBaseUrl();
@@ -238,6 +251,7 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
       return res.status(400).json({ success: false, message: '缺少文案内容' });
     }
 
+    // 只取 wenan_Array_string
     const sourceLines = extractWenanArrayOnly(text);
     if (!sourceLines.length) {
       return res.status(400).json({
@@ -246,21 +260,21 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
       });
     }
 
+    // 逐句英译 => 一行一句
     const translatedLines = await translateLinesToEnglish(sourceLines);
-
-    // 你要的格式：每句一行
     const txt = buildTxtContent(translatedLines);
 
+    // TTS 批量+SRT
     const tts = await callTtsBatch(base, txt);
 
     return res.json({
       success: true,
       data: {
-        sourceLines,               // 原始中文数组
-        lines: translatedLines,    // 英文数组（每句）
-        translated: txt,           // 英文多行文本
-        txt,                       // 送入 TTS 的 txt 内容
-        tts,                       // TTS 返回（含音频/SRT信息）
+        sourceLines, // 原中文数组
+        lines: translatedLines, // 英文数组
+        translated: txt, // 英文多行文本
+        txt, // 实际上传到 TTS 的 txt 内容
+        tts, // TTS 返回
       },
     });
   } catch (error) {
