@@ -18,7 +18,6 @@ const getVoiceBaseUrl = () => {
 
 router.get('/config', authRequired, (_req: Request, res: Response) => {
   const base = getVoiceBaseUrl();
-
   if (!base) {
     return res.status(500).json({
       success: false,
@@ -36,8 +35,6 @@ router.get('/config', authRequired, (_req: Request, res: Response) => {
   });
 });
 
-const buildTxtContent = (lines: string[]) => lines.join('\n');
-
 const pickTextFromUnknown = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (!value || typeof value !== 'object') return '';
@@ -50,7 +47,6 @@ const pickTextFromUnknown = (value: unknown): string => {
       return item.trim();
     }
   }
-
   return '';
 };
 
@@ -80,7 +76,9 @@ const normalizeTranslatedText = (raw: string): string => {
   return text;
 };
 
+/** 仅提取 wenan_Array_string */
 const extractWenanArrayOnly = (raw: string): string[] => {
+  // 1) 整体 JSON
   try {
     const obj = JSON.parse(raw) as Record<string, unknown>;
     const arr = obj.wenan_Array_string;
@@ -91,6 +89,7 @@ const extractWenanArrayOnly = (raw: string): string[] => {
     // ignore
   }
 
+  // 2) 从字符串内截取
   const match = raw.match(/"wenan_Array_string"\s*:\s*(\[[\s\S]*?\])/);
   if (match?.[1]) {
     try {
@@ -104,13 +103,12 @@ const extractWenanArrayOnly = (raw: string): string[] => {
   return [];
 };
 
+/** 逐句翻译为英文，返回纯文本数组（每项一行） */
 const translateLinesToEnglish = async (lines: string[]) => {
   const moduleInfo = modules.translation;
-  if (!moduleInfo) {
-    throw new Error('翻译模块未配置，请先在 modules.ts 增加 translation');
-  }
+  if (!moduleInfo) throw new Error('翻译模块未配置');
 
-  const translatedLines: string[] = [];
+  const out: string[] = [];
 
   for (const line of lines) {
     const stream = await cozeClient.workflows.runs.stream({
@@ -121,30 +119,50 @@ const translateLinesToEnglish = async (lines: string[]) => {
       },
     });
 
-    let translated = '';
+    let sentence = '';
 
     for await (const chunk of stream) {
       const c = chunk as Record<string, unknown>;
-      const direct = pickTextFromUnknown(c.data) || pickTextFromUnknown(c);
-      if (direct) translated = direct;
+      const dataObj = c.data as Record<string, unknown> | undefined;
+      const content = dataObj?.content;
 
-      const content = (c.data as Record<string, unknown> | undefined)?.content;
-      if (!translated && typeof content === 'string' && content.trim()) {
+      // 优先从 data.content JSON 里取 output/result/text
+      if (typeof content === 'string' && content.trim()) {
         try {
           const parsed = JSON.parse(content) as Record<string, unknown>;
-          translated = pickTextFromUnknown(parsed) || content.trim();
+          const picked = pickTextFromUnknown(parsed);
+          if (picked) {
+            sentence = picked;
+            continue;
+          }
         } catch {
-          translated = content.trim();
+          sentence = content.trim();
+          continue;
         }
       }
+
+      // 其次直接字段提取
+      const picked = pickTextFromUnknown(dataObj) || pickTextFromUnknown(c);
+      if (picked) sentence = picked;
     }
 
-    translatedLines.push(normalizeTranslatedText(translated || line));
+    sentence = normalizeTranslatedText(sentence || line);
+    sentence = sentence.replace(/\s+/g, ' ').trim();
+
+    // 兜底：如果还是 JSON 壳，回退原句
+    if (sentence.startsWith('{') || sentence.startsWith('[')) {
+      sentence = line.trim();
+    }
+
+    out.push(sentence);
   }
 
-  return translatedLines;
+  return out;
 };
 
+const buildTxtContent = (lines: string[]) => lines.join('\n');
+
+/** 按你 API Recorder 录制流程调用 TTS */
 const callTtsBatch = async (base: string, txtContent: string) => {
   const client = await Client.connect(base);
 
@@ -162,28 +180,30 @@ const callTtsBatch = async (base: string, txtContent: string) => {
   try {
     logStep('start', { base, tmpFile, txtPreview: txtContent.slice(0, 300) });
 
-    // 按 API Recorder 的流程执行（取最终参数值）
+    // 1) 批量处理
     logStep('lambda', await client.predict('/lambda', { value: true }));
+
+    // 2) 导出SRT
     logStep('lambda_1', await client.predict('/lambda_1', { value: true }));
+
+    // 3) 上传TXT文件（必须是数组）
     logStep('lambda_2', await client.predict('/lambda_2', { value: [handle_file(tmpFile)] }));
 
-    // 文本处理参数
+    // 4) 可选参数（按你录制最终值）
     logStep('lambda_4', await client.predict('/lambda_4', { value: true })); // 提炼文本
-    logStep('lambda_5', await client.predict('/lambda_5', { value: 200 })); // 切分文本长度最终值
+    logStep('lambda_5', await client.predict('/lambda_5', { value: 200 })); // 切分长度
+    logStep('lambda_14', await client.predict('/lambda_14', { value: 0 })); // oral
 
-    // 音频风格参数（按录制最终值）
-    logStep('lambda_14', await client.predict('/lambda_14', { value: 0 }));
-
-    // 增强参数
     logStep(
       'handle_enhance_audio_change',
       await client.predict('/handle_enhance_audio_change', { value: true })
     );
-    logStep('lambda_20', await client.predict('/lambda_20', { value: true }));
-    logStep('lambda_21', await client.predict('/lambda_21', { value: 'RK4' }));
-    logStep('lambda_22', await client.predict('/lambda_22', { value: 128 }));
-    logStep('lambda_23', await client.predict('/lambda_23', { value: 0.64 }));
+    logStep('lambda_20', await client.predict('/lambda_20', { value: true })); // denoise
+    logStep('lambda_21', await client.predict('/lambda_21', { value: 'RK4' })); // ODE
+    logStep('lambda_22', await client.predict('/lambda_22', { value: 128 })); // CFM Number
+    logStep('lambda_23', await client.predict('/lambda_23', { value: 0.64 })); // CFM Temp
 
+    // 5) 生成
     const finalResult = await client.predict('/generate_audio', {});
     logStep('generate_audio', finalResult);
 
@@ -199,6 +219,10 @@ const callTtsBatch = async (base: string, txtContent: string) => {
   }
 };
 
+/**
+ * 输入：产品文案结果（包含 wenan_Array_string）
+ * 输出：英文逐句 + txt + 调用TTS后的结果
+ */
 router.post('/generate-from-copy', authRequired, async (req: Request, res: Response) => {
   try {
     const base = getVoiceBaseUrl();
@@ -223,7 +247,8 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
     }
 
     const translatedLines = await translateLinesToEnglish(sourceLines);
-    const translated = translatedLines.join('\n');
+
+    // 你要的格式：每句一行
     const txt = buildTxtContent(translatedLines);
 
     const tts = await callTtsBatch(base, txt);
@@ -231,11 +256,11 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
     return res.json({
       success: true,
       data: {
-        sourceLines,
-        translated,
-        lines: translatedLines,
-        txt,
-        tts,
+        sourceLines,               // 原始中文数组
+        lines: translatedLines,    // 英文数组（每句）
+        translated: txt,           // 英文多行文本
+        txt,                       // 送入 TTS 的 txt 内容
+        tts,                       // TTS 返回（含音频/SRT信息）
       },
     });
   } catch (error) {
