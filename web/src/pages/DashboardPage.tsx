@@ -73,12 +73,26 @@ const DashboardPage = () => {
           </Space>
         </Card>
 
+        <Card className="module-card" onClick={() => navigate('/modules/translation')}>
+          <Space direction="vertical" size={8}>
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              翻译功能
+            </Typography.Title>
+            <Typography.Text type="secondary">将文案翻译为多语言版本</Typography.Text>
+            <Space size={8}>
+              <Tag>翻译</Tag>
+              <Tag>多语言</Tag>
+              <Tag>文案</Tag>
+            </Space>
+          </Space>
+        </Card>
+
         <Card className="module-card" onClick={() => navigate('/modules/voice-generator')}>
           <Space direction="vertical" size={8}>
             <Typography.Title level={5} style={{ margin: 0 }}>
               语音生成
             </Typography.Title>
-            <Typography.Text type="secondary">接入本地 ChatTTS 服务，支持在线调试</Typography.Text>
+            <Typography.Text type="secondary">接入局域网语音服务，统一使用服务器算力</Typography.Text>
             <Space size={8}>
               <Tag>TTS</Tag>
               <Tag>本地服务</Tag>

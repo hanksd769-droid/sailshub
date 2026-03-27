@@ -116,7 +116,7 @@ const callTtsBatch = async (base: string, txtContent: string) => {
     logStep('lambda_1', step2);
 
     // 3) 上传 TXT 到文件组件
-    const step3 = await client.predict('/lambda_2', { value: handle_file(tmpFile) });
+    const step3 = await client.predict('/lambda_2', { value: [handle_file(tmpFile)] });
     logStep('lambda_2', step3);
 
     // 4) 执行生成
