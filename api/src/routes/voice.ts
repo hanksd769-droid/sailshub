@@ -6,6 +6,54 @@ import { modules } from '../modules';
 
 const router = Router();
 
+type DebugRecord = {
+  id: string;
+  createdAt: string;
+  input: {
+    lines?: string[];
+    textPreview?: string;
+    extractedLines?: string[];
+  };
+  steps: Array<{
+    step: string;
+    payload: unknown;
+    at: string;
+  }>;
+  result?: unknown;
+  error?: unknown;
+};
+
+const debugStore = new Map<string, DebugRecord>();
+const MAX_DEBUG_RECORDS = 50;
+
+const createDebugRecord = (input: DebugRecord['input']) => {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const record: DebugRecord = {
+    id,
+    createdAt: new Date().toISOString(),
+    input,
+    steps: [],
+  };
+  debugStore.set(id, record);
+
+  if (debugStore.size > MAX_DEBUG_RECORDS) {
+    const firstKey = debugStore.keys().next().value as string | undefined;
+    if (firstKey) debugStore.delete(firstKey);
+  }
+
+  return record;
+};
+
+const appendDebugStep = (record: DebugRecord, step: string, payload: unknown) => {
+  const item = { step, payload, at: new Date().toISOString() };
+  record.steps.push(item);
+  try {
+    console.log(`[voice-debug][${record.id}][${step}]`, JSON.stringify(payload, null, 2));
+  } catch {
+    console.log(`[voice-debug][${record.id}][${step}]`, payload);
+  }
+};
+
 const getVoiceBaseUrl = () => {
   const raw = config.voiceBaseUrl || process.env.VOICE_BASE_URL;
   if (!raw) return '';
@@ -47,24 +95,15 @@ const pickTextFromUnknown = (value: unknown): string => {
 const flattenToLines = (arr: unknown[]): string[] =>
   arr.map((x) => String(x).trim()).filter(Boolean);
 
-/** 只提取 wenan_Array_string，兼容：
- * 1) wenan_Array_string: string[]
- * 2) wenan_Array_string: "[\"...\",\"...\"]"
- */
 const extractWenanArrayOnly = (raw: string): string[] => {
-  // 方案A：整体 JSON 可解析
   try {
     const obj = JSON.parse(raw) as Record<string, unknown>;
     const value = obj.wenan_Array_string;
 
-    if (Array.isArray(value)) {
-      return flattenToLines(value);
-    }
+    if (Array.isArray(value)) return flattenToLines(value);
 
     if (typeof value === 'string') {
       const v = value.trim();
-
-      // 字符串里是 JSON 数组
       if (v.startsWith('[') && v.endsWith(']')) {
         try {
           const arr = JSON.parse(v) as unknown[];
@@ -74,7 +113,6 @@ const extractWenanArrayOnly = (raw: string): string[] => {
         }
       }
 
-      // 兜底：按换行拆
       return v
         .split(/\r?\n/)
         .map((s) => s.trim())
@@ -84,7 +122,6 @@ const extractWenanArrayOnly = (raw: string): string[] => {
     // ignore
   }
 
-  // 方案B：从原始串抓 wenan_Array_string 的值
   const m = raw.match(/"wenan_Array_string"\s*:\s*("(\[[\s\S]*?\])"|(\[[\s\S]*?\]))/);
   if (m) {
     const rawVal = (m[2] ?? m[3] ?? '').trim();
@@ -104,18 +141,13 @@ const extractWenanArrayOnly = (raw: string): string[] => {
 const unwrapOutputShell = (raw: string): string => {
   const t = raw.trim();
 
-  // {"output":"..."} / {"output":["..."]} / {"result":"..."}
   if (t.startsWith('{') && t.endsWith('}')) {
     try {
       const obj = JSON.parse(t) as Record<string, unknown>;
       const out = obj.output ?? obj.result ?? obj.text ?? obj.translation ?? obj.content;
 
-      if (Array.isArray(out)) {
-        return out.map((x) => String(x).trim()).filter(Boolean).join(' ');
-      }
-      if (typeof out === 'string') {
-        return out.trim();
-      }
+      if (Array.isArray(out)) return out.map((x) => String(x).trim()).filter(Boolean).join(' ');
+      if (typeof out === 'string') return out.trim();
 
       const picked = pickTextFromUnknown(obj);
       if (picked) return picked;
@@ -124,7 +156,6 @@ const unwrapOutputShell = (raw: string): string => {
     }
   }
 
-  // ["..."]
   if (t.startsWith('[') && t.endsWith(']')) {
     try {
       const arr = JSON.parse(t) as unknown[];
@@ -139,14 +170,21 @@ const unwrapOutputShell = (raw: string): string => {
 
 const hasChinese = (s: string) => /[\u4e00-\u9fff]/.test(s);
 
-/** 每句单独翻译，返回纯英文行 */
-const translateLinesToEnglish = async (lines: string[]) => {
+const extractEnglishChunks = (s: string) => {
+  const chunks = s.match(/[A-Za-z0-9][A-Za-z0-9 ,.';:!?()\-]*/g) || [];
+  return chunks.join(' ').replace(/\s+/g, ' ').trim();
+};
+
+const translateLinesToEnglish = async (lines: string[], record: DebugRecord) => {
   const moduleInfo = modules.translation;
   if (!moduleInfo) throw new Error('翻译模块未配置');
 
   const out: string[] = [];
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    appendDebugStep(record, 'translate_line_input', { index: i, line });
+
     const stream = await cozeClient.workflows.runs.stream({
       workflow_id: moduleInfo.workflowId,
       parameters: {
@@ -155,36 +193,35 @@ const translateLinesToEnglish = async (lines: string[]) => {
       },
     });
 
+    const rawChunks: unknown[] = [];
     let sentence = '';
 
     for await (const chunk of stream) {
+      rawChunks.push(chunk);
       const c = chunk as Record<string, unknown>;
       const dataObj = c.data as Record<string, unknown> | undefined;
       const content = dataObj?.content;
 
-      // 优先 content
       if (typeof content === 'string' && content.trim()) {
         sentence = unwrapOutputShell(content);
         continue;
       }
 
-      // 其次直接字段
       const picked = pickTextFromUnknown(dataObj) || pickTextFromUnknown(c);
       if (picked) sentence = unwrapOutputShell(picked);
     }
 
-    sentence = unwrapOutputShell(sentence).replace(/\s+/g, ' ').trim();
+    appendDebugStep(record, 'translate_line_raw_chunks', { index: i, chunks: rawChunks });
 
-    // 如果仍为空，回退原句；如果含中文，优先拿最后一段英文
+    sentence = unwrapOutputShell(sentence).replace(/\s+/g, ' ').trim();
     if (!sentence) sentence = line.trim();
 
     if (hasChinese(sentence)) {
-      // 提取连续英文片段作为兜底
-      const englishChunks = sentence.match(/[A-Za-z0-9][A-Za-z0-9 ,.';:!?()-]*/g) || [];
-      const merged = englishChunks.join(' ').replace(/\s+/g, ' ').trim();
-      if (merged) sentence = merged;
+      const englishOnly = extractEnglishChunks(sentence);
+      if (englishOnly) sentence = englishOnly;
     }
 
+    appendDebugStep(record, 'translate_line_output', { index: i, sentence });
     out.push(sentence);
   }
 
@@ -193,48 +230,100 @@ const translateLinesToEnglish = async (lines: string[]) => {
 
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
-/**
- * 独立英译接口
- * 入参：
- * 1) lines: string[]
- * 2) text: string（product-copy 原始结果，自动提取 wenan_Array_string）
- */
-router.post('/translate-lines', authRequired, async (req: Request, res: Response) => {
-  try {
-    const { lines, text } = req.body as {
-      lines?: string[];
-      text?: string;
-    };
+router.get('/debug/:id', authRequired, (req: Request, res: Response) => {
+  const record = debugStore.get(req.params.id);
+  if (!record) {
+    return res.status(404).json({ success: false, message: 'debug 记录不存在' });
+  }
+  return res.json({ success: true, data: record });
+});
 
+router.get('/debug', authRequired, (_req: Request, res: Response) => {
+  const list = Array.from(debugStore.values()).map((r) => ({
+    id: r.id,
+    createdAt: r.createdAt,
+    linesCount: r.input.extractedLines?.length ?? r.input.lines?.length ?? 0,
+    hasError: Boolean(r.error),
+  }));
+
+  return res.json({ success: true, data: list });
+});
+
+router.post('/translate-lines', authRequired, async (req: Request, res: Response) => {
+  const { lines, text } = req.body as {
+    lines?: string[];
+    text?: string;
+  };
+
+  const record = createDebugRecord({
+    lines,
+    textPreview: typeof text === 'string' ? text.slice(0, 1200) : undefined,
+  });
+
+  try {
     let sourceLines: string[] = [];
 
     if (Array.isArray(lines) && lines.length > 0) {
       sourceLines = lines.map((x) => String(x).trim()).filter(Boolean);
+      appendDebugStep(record, 'source_from_lines', sourceLines);
     } else if (typeof text === 'string' && text.trim()) {
       sourceLines = extractWenanArrayOnly(text);
+      appendDebugStep(record, 'source_from_text_extracted', sourceLines);
     }
 
+    record.input.extractedLines = sourceLines;
+
     if (!sourceLines.length) {
+      const errorPayload = {
+        message: '未从文案结果中提取到 wenan_Array_string',
+        hint: '请检查 product-copy 输出是否包含 wenan_Array_string',
+      };
+      record.error = errorPayload;
+      appendDebugStep(record, 'error', errorPayload);
       return res.status(400).json({
         success: false,
-        message: '未从文案结果中提取到 wenan_Array_string',
+        message: errorPayload.message,
+        debugId: record.id,
+        debugUrl: `/api/voice/debug/${record.id}`,
       });
     }
 
-    const translatedLines = await translateLinesToEnglish(sourceLines);
+    const translatedLines = await translateLinesToEnglish(sourceLines, record);
     const txt = buildTxtContent(translatedLines);
+
+    const result = {
+      sourceLines,
+      translatedLines,
+      txt,
+    };
+
+    record.result = result;
+    appendDebugStep(record, 'final_result', result);
 
     return res.json({
       success: true,
-      data: {
-        sourceLines,
-        translatedLines,
-        txt,
-      },
+      data: result,
+      debugId: record.id,
+      debugUrl: `/api/voice/debug/${record.id}`,
+      debugListUrl: '/api/voice/debug',
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : '英译失败';
-    return res.status(500).json({ success: false, message });
+    const errorPayload = {
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+    };
+
+    record.error = errorPayload;
+    appendDebugStep(record, 'error', errorPayload);
+
+    return res.status(500).json({
+      success: false,
+      message,
+      debugId: record.id,
+      debugUrl: `/api/voice/debug/${record.id}`,
+      debugListUrl: '/api/voice/debug',
+    });
   }
 });
 
