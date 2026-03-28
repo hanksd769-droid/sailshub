@@ -39,37 +39,9 @@ const pickTextFromUnknown = (value: unknown): string => {
   const candidates = [obj.output, obj.result, obj.text, obj.content, obj.translation];
 
   for (const item of candidates) {
-    if (typeof item === 'string' && item.trim()) {
-      return item.trim();
-    }
+    if (typeof item === 'string' && item.trim()) return item.trim();
   }
   return '';
-};
-
-const normalizeTranslatedText = (raw: string): string => {
-  const text = raw.trim();
-
-  if (text.startsWith('{') && text.endsWith('}')) {
-    try {
-      const obj = JSON.parse(text) as Record<string, unknown>;
-      const picked = pickTextFromUnknown(obj);
-      if (picked) return picked;
-    } catch {
-      // ignore
-    }
-  }
-
-  if (text.startsWith('[') && text.endsWith(']')) {
-    try {
-      const arr = JSON.parse(text) as unknown[];
-      if (arr.length === 1 && typeof arr[0] === 'string') return arr[0].trim();
-      return arr.map((x) => String(x)).join(' ').trim();
-    } catch {
-      // ignore
-    }
-  }
-
-  return text;
 };
 
 const extractWenanArrayOnly = (raw: string): string[] => {
@@ -96,6 +68,65 @@ const extractWenanArrayOnly = (raw: string): string[] => {
   return [];
 };
 
+/** 把 {"output":["..."]} / {"output":"..."} / 纯文本 统一转换为纯文本 */
+const unwrapOutputShell = (raw: string): string => {
+  const t = raw.trim();
+
+  // 纯 JSON 对象
+  if (t.startsWith('{') && t.endsWith('}')) {
+    try {
+      const obj = JSON.parse(t) as Record<string, unknown>;
+      const out = obj.output ?? obj.result ?? obj.text ?? obj.translation ?? obj.content;
+
+      if (Array.isArray(out)) {
+        return out.map((x) => String(x).trim()).filter(Boolean).join(' ');
+      }
+      if (typeof out === 'string') {
+        return out.trim();
+      }
+
+      const picked = pickTextFromUnknown(obj);
+      if (picked) return picked;
+    } catch {
+      // ignore
+    }
+  }
+
+  // 纯 JSON 数组
+  if (t.startsWith('[') && t.endsWith(']')) {
+    try {
+      const arr = JSON.parse(t) as unknown[];
+      return arr.map((x) => String(x).trim()).filter(Boolean).join(' ');
+    } catch {
+      // ignore
+    }
+  }
+
+  return t;
+};
+
+/** 处理这种拼接串：{"output":[...]} {"output":[...]} ... */
+const stripNestedOutputWrappers = (raw: string): string => {
+  const objRegex = /\{[\s\S]*?\}/g;
+  const segments = raw.match(objRegex);
+
+  if (!segments || segments.length === 0) {
+    return unwrapOutputShell(raw);
+  }
+
+  const lines: string[] = [];
+  for (const seg of segments) {
+    const clean = unwrapOutputShell(seg)
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (clean) lines.push(clean);
+  }
+
+  // 如果正则没提取到有效内容，回退原逻辑
+  if (!lines.length) return unwrapOutputShell(raw);
+  return lines.join('\n');
+};
+
 const translateLinesToEnglish = async (lines: string[]) => {
   const moduleInfo = modules.translation;
   if (!moduleInfo) throw new Error('翻译模块未配置');
@@ -118,25 +149,21 @@ const translateLinesToEnglish = async (lines: string[]) => {
       const dataObj = c.data as Record<string, unknown> | undefined;
       const content = dataObj?.content;
 
+      // 先吃 content
       if (typeof content === 'string' && content.trim()) {
-        try {
-          const parsed = JSON.parse(content) as Record<string, unknown>;
-          const picked = pickTextFromUnknown(parsed);
-          if (picked) {
-            sentence = picked;
-            continue;
-          }
-        } catch {
-          sentence = content.trim();
-          continue;
-        }
+        sentence = stripNestedOutputWrappers(content);
+        continue;
       }
 
+      // 再吃直接字段
       const picked = pickTextFromUnknown(dataObj) || pickTextFromUnknown(c);
-      if (picked) sentence = picked;
+      if (picked) sentence = stripNestedOutputWrappers(picked);
     }
 
-    sentence = normalizeTranslatedText(sentence || line).replace(/\s+/g, ' ').trim();
+    sentence = stripNestedOutputWrappers(sentence || line)
+      .replace(/\s+/g, ' ')
+      .trim();
+
     out.push(sentence);
   }
 
@@ -146,17 +173,10 @@ const translateLinesToEnglish = async (lines: string[]) => {
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
 /**
- * 新功能：只做英译，不做TTS
- * 入参支持两种：
- * 1) lines: string[]         直接传数组
- * 2) text: string            传 product-copy 原始 JSON 字符串（自动提取 wenan_Array_string）
- *
- * 返回：
- * {
- *   sourceLines: string[],
- *   translatedLines: string[],
- *   txt: string   // 一行一句英文
- * }
+ * 独立英译接口（当前只做这一步）
+ * 入参：
+ * 1) lines: string[]
+ * 2) text: string（product-copy 原始结果，自动提取 wenan_Array_string）
  */
 router.post('/translate-lines', authRequired, async (req: Request, res: Response) => {
   try {
@@ -193,55 +213,6 @@ router.post('/translate-lines', authRequired, async (req: Request, res: Response
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : '英译失败';
-    return res.status(500).json({ success: false, message });
-  }
-});
-
-/**
- * 保留通用代理（后续你接TTS时可继续用）
- */
-router.post('/proxy', authRequired, async (req: Request, res: Response) => {
-  try {
-    const base = getVoiceBaseUrl();
-    if (!base) {
-      return res.status(500).json({
-        success: false,
-        message: 'VOICE_BASE_URL 未配置，请检查 api/.env 或 config.ts',
-      });
-    }
-
-    const { path, payload } = req.body as {
-      path?: string;
-      payload?: unknown;
-    };
-
-    if (!path) {
-      return res.status(400).json({ success: false, message: '缺少 path' });
-    }
-
-    const response = await fetch(`${base}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload ?? {}),
-    });
-
-    const textResp = await response.text();
-
-    if (!response.ok) {
-      return res.status(500).json({
-        success: false,
-        message: textResp || `语音服务返回错误: ${response.status}`,
-      });
-    }
-
-    try {
-      const data = JSON.parse(textResp);
-      return res.json({ success: true, data });
-    } catch {
-      return res.json({ success: true, data: textResp });
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '语音代理调用失败';
     return res.status(500).json({ success: false, message });
   }
 });
