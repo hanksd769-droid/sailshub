@@ -17,7 +17,6 @@ const ProductCopyPage = () => {
   const [progress, setProgress] = useState(0);
   const [errorText, setErrorText] = useState('');
 
-  // 独立英译结果
   const [translateLoading, setTranslateLoading] = useState(false);
   const [translatedText, setTranslatedText] = useState('');
   const [translatedJson, setTranslatedJson] = useState('');
@@ -56,11 +55,12 @@ const ProductCopyPage = () => {
           };
 
           if (eventObj.event === 'Message' && eventObj.data?.content) {
+            const content = eventObj.data.content;
             try {
-              const parsed = JSON.parse(eventObj.data.content) as { output?: string };
-              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${parsed.output ?? eventObj.data!.content}`);
+              const parsed = JSON.parse(content) as { output?: string };
+              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${parsed.output || content}`);
             } catch {
-              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${eventObj.data.content}`);
+              setStreamText((prev) => `${prev}${prev ? '\n' : ''}${content}`);
             }
           }
         },
@@ -83,7 +83,6 @@ const ProductCopyPage = () => {
     }
   };
 
-  // 独立英译按钮
   const handleTranslateOnly = async () => {
     if (!streamText.trim()) {
       message.warning('请先点击“开始生成”得到文案结果');
@@ -96,8 +95,7 @@ const ProductCopyPage = () => {
 
     try {
       const res = await translateLinesFromCopy(streamText);
-      const lines = res.data.translatedLines || [];
-      const txt = res.data.txt || lines.join('\n');
+      const txt = res.data.txt || (res.data.translatedLines || []).join('\n');
 
       setTranslatedText(txt); // 一行一句英文
       setTranslatedJson(JSON.stringify(res.data, null, 2));

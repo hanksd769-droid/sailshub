@@ -15,9 +15,7 @@ export const apiFetch = async <T>(path: string, options: RequestInit = {}) => {
   headers.set('Content-Type', 'application/json');
 
   const token = getToken();
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
+  if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -87,8 +85,8 @@ export const runWorkflowStream = async (
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true });
 
+    buffer += decoder.decode(value, { stream: true });
     const parts = buffer.split('\n\n');
     buffer = parts.pop() || '';
 
@@ -102,26 +100,21 @@ export const runWorkflowStream = async (
       if (part.startsWith('event: error')) {
         if (hasDone) continue;
         const messageLine = part.split('\n').find((line) => line.startsWith('data: '));
-        let message = messageLine ? messageLine.replace('data: ', '') : '运行失败';
+        let msg = messageLine ? messageLine.replace('data: ', '') : '运行失败';
         try {
-          const parsed = JSON.parse(message) as { message?: string };
-          if (parsed?.message) message = parsed.message;
+          const parsed = JSON.parse(msg) as { message?: string };
+          if (parsed?.message) msg = parsed.message;
         } catch {
-          // keep raw
+          // ignore
         }
-        onError(message);
+        onError(msg);
         continue;
       }
 
       if (part.startsWith('data: ')) {
         const json = part.replace('data: ', '');
         try {
-          const parsed = JSON.parse(json) as { event?: string };
-          if (parsed?.event === 'Done') {
-            hasDone = true;
-            onDone();
-          }
-          onMessage(parsed);
+          onMessage(JSON.parse(json));
         } catch {
           onMessage(json);
         }
@@ -141,16 +134,15 @@ export const getVoiceConfig = async () => {
   }>('/api/voice/config');
 };
 
-export const generateVoiceFromCopy = async (text: string) => {
+export const translateLinesFromCopy = async (text: string) => {
   return apiFetch<{
     success: boolean;
     data: {
-      translated: string;
-      lines: string[];
+      sourceLines: string[];
+      translatedLines: string[];
       txt: string;
-      tts: unknown;
     };
-  }>('/api/voice/generate-from-copy', {
+  }>('/api/voice/translate-lines', {
     method: 'POST',
     body: JSON.stringify({ text }),
   });
