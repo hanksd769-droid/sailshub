@@ -3,10 +3,6 @@ import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
 import { modules } from '../modules';
-import { Client, handle_file } from '@gradio/client';
-import { promises as fs } from 'fs';
-import os from 'os';
-import path from 'path';
 
 const router = Router();
 
@@ -76,7 +72,6 @@ const normalizeTranslatedText = (raw: string): string => {
   return text;
 };
 
-/** 仅提取 wenan_Array_string */
 const extractWenanArrayOnly = (raw: string): string[] => {
   try {
     const obj = JSON.parse(raw) as Record<string, unknown>;
@@ -101,7 +96,6 @@ const extractWenanArrayOnly = (raw: string): string[] => {
   return [];
 };
 
-/** 逐句翻译为英文，输出纯文本数组（每项一行） */
 const translateLinesToEnglish = async (lines: string[]) => {
   const moduleInfo = modules.translation;
   if (!moduleInfo) throw new Error('翻译模块未配置');
@@ -124,7 +118,6 @@ const translateLinesToEnglish = async (lines: string[]) => {
       const dataObj = c.data as Record<string, unknown> | undefined;
       const content = dataObj?.content;
 
-      // 优先 data.content JSON
       if (typeof content === 'string' && content.trim()) {
         try {
           const parsed = JSON.parse(content) as Record<string, unknown>;
@@ -139,18 +132,11 @@ const translateLinesToEnglish = async (lines: string[]) => {
         }
       }
 
-      // 其次直接字段
       const picked = pickTextFromUnknown(dataObj) || pickTextFromUnknown(c);
       if (picked) sentence = picked;
     }
 
     sentence = normalizeTranslatedText(sentence || line).replace(/\s+/g, ' ').trim();
-
-    // 兜底：仍是 JSON 壳则回退原句
-    if (sentence.startsWith('{') || sentence.startsWith('[')) {
-      sentence = line.trim();
-    }
-
     out.push(sentence);
   }
 
@@ -159,84 +145,62 @@ const translateLinesToEnglish = async (lines: string[]) => {
 
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
-const callTtsBatch = async (base: string, txtContent: string) => {
-  const client = await Client.connect(base);
-
-  const tmpFile = path.join(os.tmpdir(), `voice-${Date.now()}.txt`);
-  await fs.writeFile(tmpFile, txtContent, 'utf-8');
-
-  const logStep = (step: string, payload: unknown) => {
-    try {
-      console.log(`[voice][${step}]`, JSON.stringify(payload, null, 2));
-    } catch {
-      console.log(`[voice][${step}]`, payload);
-    }
-  };
-
+/**
+ * 新功能：只做英译，不做TTS
+ * 入参支持两种：
+ * 1) lines: string[]         直接传数组
+ * 2) text: string            传 product-copy 原始 JSON 字符串（自动提取 wenan_Array_string）
+ *
+ * 返回：
+ * {
+ *   sourceLines: string[],
+ *   translatedLines: string[],
+ *   txt: string   // 一行一句英文
+ * }
+ */
+router.post('/translate-lines', authRequired, async (req: Request, res: Response) => {
   try {
-    logStep('start', {
-      base,
-      tmpFile,
-      txtPreview: txtContent.slice(0, 500),
-      txtLines: txtContent.split('\n').length,
-    });
+    const { lines, text } = req.body as {
+      lines?: string[];
+      text?: string;
+    };
 
-    // 1) 批量处理 + 导出SRT
-    const step1 = await client.predict('/lambda', { value: true });
-    logStep('lambda', step1);
+    let sourceLines: string[] = [];
 
-    const step2 = await client.predict('/lambda_1', { value: true });
-    logStep('lambda_1', step2);
+    if (Array.isArray(lines) && lines.length > 0) {
+      sourceLines = lines.map((x) => String(x).trim()).filter(Boolean);
+    } else if (typeof text === 'string' && text.trim()) {
+      sourceLines = extractWenanArrayOnly(text);
+    }
 
-    // 2) 文件方式绑定
-    let fileBindOk = true;
-    try {
-      const step3 = await client.predict('/lambda_2', {
-        value: [handle_file(tmpFile)], // ListFiles
-      });
-      logStep('lambda_2', step3);
-    } catch (e) {
-      fileBindOk = false;
-      logStep('lambda_2_error', {
-        message: e instanceof Error ? e.message : String(e),
+    if (!sourceLines.length) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少可翻译内容（请传 lines 或包含 wenan_Array_string 的 text）',
       });
     }
 
-    // 3) 兜底：直接写入“输入文字”
-    const stepText = await client.predict('/lambda_3', { value: txtContent });
-    logStep('lambda_3', { fileBindOk, result: stepText });
+    const translatedLines = await translateLinesToEnglish(sourceLines);
+    const txt = buildTxtContent(translatedLines);
 
-    // 4) 参数（按录制最终值）
-    logStep('lambda_4', await client.predict('/lambda_4', { value: true })); // 提炼文本
-    logStep('lambda_5', await client.predict('/lambda_5', { value: 200 })); // 切分长度
-    logStep('lambda_14', await client.predict('/lambda_14', { value: 0 }));
-
-    logStep(
-      'handle_enhance_audio_change',
-      await client.predict('/handle_enhance_audio_change', { value: true })
-    );
-    logStep('lambda_20', await client.predict('/lambda_20', { value: true }));
-    logStep('lambda_21', await client.predict('/lambda_21', { value: 'RK4' }));
-    logStep('lambda_22', await client.predict('/lambda_22', { value: 128 }));
-    logStep('lambda_23', await client.predict('/lambda_23', { value: 0.64 }));
-
-    // 5) 生成
-    const finalResult = await client.predict('/generate_audio', {});
-    logStep('generate_audio', finalResult);
-
-    return finalResult?.data ?? finalResult;
-  } catch (error) {
-    logStep('error', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+    return res.json({
+      success: true,
+      data: {
+        sourceLines,
+        translatedLines,
+        txt,
+      },
     });
-    throw error;
-  } finally {
-    await fs.unlink(tmpFile).catch(() => {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '英译失败';
+    return res.status(500).json({ success: false, message });
   }
-};
+});
 
-router.post('/generate-from-copy', authRequired, async (req: Request, res: Response) => {
+/**
+ * 保留通用代理（后续你接TTS时可继续用）
+ */
+router.post('/proxy', authRequired, async (req: Request, res: Response) => {
   try {
     const base = getVoiceBaseUrl();
     if (!base) {
@@ -246,39 +210,38 @@ router.post('/generate-from-copy', authRequired, async (req: Request, res: Respo
       });
     }
 
-    const { text } = req.body as { text?: string };
-    if (!text || !text.trim()) {
-      return res.status(400).json({ success: false, message: '缺少文案内容' });
+    const { path, payload } = req.body as {
+      path?: string;
+      payload?: unknown;
+    };
+
+    if (!path) {
+      return res.status(400).json({ success: false, message: '缺少 path' });
     }
 
-    // 只取 wenan_Array_string
-    const sourceLines = extractWenanArrayOnly(text);
-    if (!sourceLines.length) {
-      return res.status(400).json({
+    const response = await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload ?? {}),
+    });
+
+    const textResp = await response.text();
+
+    if (!response.ok) {
+      return res.status(500).json({
         success: false,
-        message: '未从文案结果中提取到 wenan_Array_string',
+        message: textResp || `语音服务返回错误: ${response.status}`,
       });
     }
 
-    // 逐句英译 => 一行一句
-    const translatedLines = await translateLinesToEnglish(sourceLines);
-    const txt = buildTxtContent(translatedLines);
-
-    // TTS 批量+SRT
-    const tts = await callTtsBatch(base, txt);
-
-    return res.json({
-      success: true,
-      data: {
-        sourceLines, // 原中文数组
-        lines: translatedLines, // 英文数组
-        translated: txt, // 英文多行文本
-        txt, // 实际上传到 TTS 的 txt 内容
-        tts, // TTS 返回
-      },
-    });
+    try {
+      const data = JSON.parse(textResp);
+      return res.json({ success: true, data });
+    } catch {
+      return res.json({ success: true, data: textResp });
+    }
   } catch (error) {
-    const message = error instanceof Error ? error.message : '语音生成失败';
+    const message = error instanceof Error ? error.message : '语音代理调用失败';
     return res.status(500).json({ success: false, message });
   }
 });
