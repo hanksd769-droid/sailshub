@@ -44,35 +44,67 @@ const pickTextFromUnknown = (value: unknown): string => {
   return '';
 };
 
+const flattenToLines = (arr: unknown[]): string[] =>
+  arr.map((x) => String(x).trim()).filter(Boolean);
+
+/** 只提取 wenan_Array_string，兼容：
+ * 1) wenan_Array_string: string[]
+ * 2) wenan_Array_string: "[\"...\",\"...\"]"
+ */
 const extractWenanArrayOnly = (raw: string): string[] => {
+  // 方案A：整体 JSON 可解析
   try {
     const obj = JSON.parse(raw) as Record<string, unknown>;
-    const arr = obj.wenan_Array_string;
-    if (Array.isArray(arr)) {
-      return arr.map((x) => String(x).trim()).filter(Boolean);
+    const value = obj.wenan_Array_string;
+
+    if (Array.isArray(value)) {
+      return flattenToLines(value);
+    }
+
+    if (typeof value === 'string') {
+      const v = value.trim();
+
+      // 字符串里是 JSON 数组
+      if (v.startsWith('[') && v.endsWith(']')) {
+        try {
+          const arr = JSON.parse(v) as unknown[];
+          if (Array.isArray(arr)) return flattenToLines(arr);
+        } catch {
+          // ignore
+        }
+      }
+
+      // 兜底：按换行拆
+      return v
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
   } catch {
     // ignore
   }
 
-  const match = raw.match(/"wenan_Array_string"\s*:\s*(\[[\s\S]*?\])/);
-  if (match?.[1]) {
-    try {
-      const arr = JSON.parse(match[1]) as unknown[];
-      return arr.map((x) => String(x).trim()).filter(Boolean);
-    } catch {
-      // ignore
+  // 方案B：从原始串抓 wenan_Array_string 的值
+  const m = raw.match(/"wenan_Array_string"\s*:\s*("(\[[\s\S]*?\])"|(\[[\s\S]*?\]))/);
+  if (m) {
+    const rawVal = (m[2] ?? m[3] ?? '').trim();
+    if (rawVal) {
+      try {
+        const arr = JSON.parse(rawVal) as unknown[];
+        if (Array.isArray(arr)) return flattenToLines(arr);
+      } catch {
+        // ignore
+      }
     }
   }
 
   return [];
 };
 
-/** 把 {"output":["..."]} / {"output":"..."} / 纯文本 统一转换为纯文本 */
 const unwrapOutputShell = (raw: string): string => {
   const t = raw.trim();
 
-  // 纯 JSON 对象
+  // {"output":"..."} / {"output":["..."]} / {"result":"..."}
   if (t.startsWith('{') && t.endsWith('}')) {
     try {
       const obj = JSON.parse(t) as Record<string, unknown>;
@@ -92,7 +124,7 @@ const unwrapOutputShell = (raw: string): string => {
     }
   }
 
-  // 纯 JSON 数组
+  // ["..."]
   if (t.startsWith('[') && t.endsWith(']')) {
     try {
       const arr = JSON.parse(t) as unknown[];
@@ -105,28 +137,9 @@ const unwrapOutputShell = (raw: string): string => {
   return t;
 };
 
-/** 处理这种拼接串：{"output":[...]} {"output":[...]} ... */
-const stripNestedOutputWrappers = (raw: string): string => {
-  const objRegex = /\{[\s\S]*?\}/g;
-  const segments = raw.match(objRegex);
+const hasChinese = (s: string) => /[\u4e00-\u9fff]/.test(s);
 
-  if (!segments || segments.length === 0) {
-    return unwrapOutputShell(raw);
-  }
-
-  const lines: string[] = [];
-  for (const seg of segments) {
-    const clean = unwrapOutputShell(seg)
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (clean) lines.push(clean);
-  }
-
-  // 如果正则没提取到有效内容，回退原逻辑
-  if (!lines.length) return unwrapOutputShell(raw);
-  return lines.join('\n');
-};
-
+/** 每句单独翻译，返回纯英文行 */
 const translateLinesToEnglish = async (lines: string[]) => {
   const moduleInfo = modules.translation;
   if (!moduleInfo) throw new Error('翻译模块未配置');
@@ -149,20 +162,28 @@ const translateLinesToEnglish = async (lines: string[]) => {
       const dataObj = c.data as Record<string, unknown> | undefined;
       const content = dataObj?.content;
 
-      // 先吃 content
+      // 优先 content
       if (typeof content === 'string' && content.trim()) {
-        sentence = stripNestedOutputWrappers(content);
+        sentence = unwrapOutputShell(content);
         continue;
       }
 
-      // 再吃直接字段
+      // 其次直接字段
       const picked = pickTextFromUnknown(dataObj) || pickTextFromUnknown(c);
-      if (picked) sentence = stripNestedOutputWrappers(picked);
+      if (picked) sentence = unwrapOutputShell(picked);
     }
 
-    sentence = stripNestedOutputWrappers(sentence || line)
-      .replace(/\s+/g, ' ')
-      .trim();
+    sentence = unwrapOutputShell(sentence).replace(/\s+/g, ' ').trim();
+
+    // 如果仍为空，回退原句；如果含中文，优先拿最后一段英文
+    if (!sentence) sentence = line.trim();
+
+    if (hasChinese(sentence)) {
+      // 提取连续英文片段作为兜底
+      const englishChunks = sentence.match(/[A-Za-z0-9][A-Za-z0-9 ,.';:!?()-]*/g) || [];
+      const merged = englishChunks.join(' ').replace(/\s+/g, ' ').trim();
+      if (merged) sentence = merged;
+    }
 
     out.push(sentence);
   }
@@ -173,7 +194,7 @@ const translateLinesToEnglish = async (lines: string[]) => {
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
 /**
- * 独立英译接口（当前只做这一步）
+ * 独立英译接口
  * 入参：
  * 1) lines: string[]
  * 2) text: string（product-copy 原始结果，自动提取 wenan_Array_string）
@@ -196,7 +217,7 @@ router.post('/translate-lines', authRequired, async (req: Request, res: Response
     if (!sourceLines.length) {
       return res.status(400).json({
         success: false,
-        message: '缺少可翻译内容（请传 lines 或包含 wenan_Array_string 的 text）',
+        message: '未从文案结果中提取到 wenan_Array_string',
       });
     }
 
