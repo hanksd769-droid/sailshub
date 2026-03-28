@@ -2,7 +2,6 @@ import { Router, type Request, type Response } from 'express';
 import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
-import { modules } from '../modules';
 
 const router = Router();
 
@@ -25,6 +24,8 @@ type DebugRecord = {
 
 const debugStore = new Map<string, DebugRecord>();
 const MAX_DEBUG_RECORDS = 50;
+
+const BULK_TRANSLATION_WORKFLOW_ID = '7622189167463678015';
 
 const createDebugRecord = (input: DebugRecord['input']) => {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -79,21 +80,7 @@ router.get('/config', authRequired, (_req: Request, res: Response) => {
   });
 });
 
-const pickTextFromUnknown = (value: unknown): string => {
-  if (typeof value === 'string') return value.trim();
-  if (!value || typeof value !== 'object') return '';
-
-  const obj = value as Record<string, unknown>;
-  const candidates = [obj.output, obj.result, obj.text, obj.content, obj.translation];
-
-  for (const item of candidates) {
-    if (typeof item === 'string' && item.trim()) return item.trim();
-  }
-  return '';
-};
-
-const flattenToLines = (arr: unknown[]): string[] =>
-  arr.map((x) => String(x).trim()).filter(Boolean);
+const flattenToLines = (arr: unknown[]): string[] => arr.map((x) => String(x).trim()).filter(Boolean);
 
 const extractWenanArrayOnly = (raw: string): string[] => {
   try {
@@ -138,94 +125,80 @@ const extractWenanArrayOnly = (raw: string): string[] => {
   return [];
 };
 
-const unwrapOutputShell = (raw: string): string => {
-  const t = raw.trim();
+const extractOutputArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) return flattenToLines(value);
 
-  if (t.startsWith('{') && t.endsWith('}')) {
-    try {
-      const obj = JSON.parse(t) as Record<string, unknown>;
-      const out = obj.output ?? obj.result ?? obj.text ?? obj.translation ?? obj.content;
-
-      if (Array.isArray(out)) return out.map((x) => String(x).trim()).filter(Boolean).join(' ');
-      if (typeof out === 'string') return out.trim();
-
-      const picked = pickTextFromUnknown(obj);
-      if (picked) return picked;
-    } catch {
-      // ignore
-    }
-  }
-
-  if (t.startsWith('[') && t.endsWith(']')) {
-    try {
-      const arr = JSON.parse(t) as unknown[];
-      return arr.map((x) => String(x).trim()).filter(Boolean).join(' ');
-    } catch {
-      // ignore
-    }
-  }
-
-  return t;
-};
-
-const hasChinese = (s: string) => /[\u4e00-\u9fff]/.test(s);
-
-const extractEnglishChunks = (s: string) => {
-  const chunks = s.match(/[A-Za-z0-9][A-Za-z0-9 ,.';:!?()\-]*/g) || [];
-  return chunks.join(' ').replace(/\s+/g, ' ').trim();
-};
-
-const translateLinesToEnglish = async (lines: string[], record: DebugRecord) => {
-  const moduleInfo = modules.translation;
-  if (!moduleInfo) throw new Error('翻译模块未配置');
-
-  const out: string[] = [];
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    appendDebugStep(record, 'translate_line_input', { index: i, line });
-
-    const stream = await cozeClient.workflows.runs.stream({
-      workflow_id: moduleInfo.workflowId,
-      parameters: {
-        erchuan_wenan: line,
-        language: 'english',
-      },
-    });
-
-    const rawChunks: unknown[] = [];
-    let sentence = '';
-
-    for await (const chunk of stream) {
-      rawChunks.push(chunk);
-      const c = chunk as Record<string, unknown>;
-      const dataObj = c.data as Record<string, unknown> | undefined;
-      const content = dataObj?.content;
-
-      if (typeof content === 'string' && content.trim()) {
-        sentence = unwrapOutputShell(content);
-        continue;
+  if (typeof value === 'string') {
+    const v = value.trim();
+    if (v.startsWith('[') && v.endsWith(']')) {
+      try {
+        const arr = JSON.parse(v) as unknown[];
+        if (Array.isArray(arr)) return flattenToLines(arr);
+      } catch {
+        // ignore
       }
-
-      const picked = pickTextFromUnknown(dataObj) || pickTextFromUnknown(c);
-      if (picked) sentence = unwrapOutputShell(picked);
     }
 
-    appendDebugStep(record, 'translate_line_raw_chunks', { index: i, chunks: rawChunks });
-
-    sentence = unwrapOutputShell(sentence).replace(/\s+/g, ' ').trim();
-    if (!sentence) sentence = line.trim();
-
-    if (hasChinese(sentence)) {
-      const englishOnly = extractEnglishChunks(sentence);
-      if (englishOnly) sentence = englishOnly;
+    if (v.startsWith('{') && v.endsWith('}')) {
+      try {
+        const obj = JSON.parse(v) as Record<string, unknown>;
+        return extractOutputArray(obj.output ?? obj.data ?? obj.result ?? obj.text);
+      } catch {
+        // ignore
+      }
     }
-
-    appendDebugStep(record, 'translate_line_output', { index: i, sentence });
-    out.push(sentence);
   }
 
-  return out;
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    return extractOutputArray(obj.output ?? obj.data ?? obj.result ?? obj.text);
+  }
+
+  return [];
+};
+
+const translateByBulkWorkflow = async (sourceLines: string[], record: DebugRecord) => {
+  appendDebugStep(record, 'bulk_translate_input', {
+    workflow_id: BULK_TRANSLATION_WORKFLOW_ID,
+    parameters: { input: sourceLines },
+  });
+
+  const stream = await cozeClient.workflows.runs.stream({
+    workflow_id: BULK_TRANSLATION_WORKFLOW_ID,
+    parameters: { input: sourceLines },
+  });
+
+  const rawChunks: unknown[] = [];
+  let finalOutput: string[] = [];
+
+  for await (const chunk of stream) {
+    rawChunks.push(chunk);
+
+    const c = chunk as Record<string, unknown>;
+    const directData = c.data;
+    const found = extractOutputArray(directData);
+    if (found.length > 0) {
+      finalOutput = found;
+      continue;
+    }
+
+    const content = (directData as Record<string, unknown> | undefined)?.content;
+    if (typeof content === 'string' && content.trim()) {
+      const fromContent = extractOutputArray(content);
+      if (fromContent.length > 0) {
+        finalOutput = fromContent;
+      }
+    }
+  }
+
+  appendDebugStep(record, 'bulk_translate_raw_chunks', rawChunks);
+  appendDebugStep(record, 'bulk_translate_output', finalOutput);
+
+  if (!finalOutput.length) {
+    throw new Error('批量翻译工作流未返回 output 数组');
+  }
+
+  return finalOutput;
 };
 
 const buildTxtContent = (lines: string[]) => lines.join('\n');
@@ -288,7 +261,7 @@ router.post('/translate-lines', authRequired, async (req: Request, res: Response
       });
     }
 
-    const translatedLines = await translateLinesToEnglish(sourceLines, record);
+    const translatedLines = await translateByBulkWorkflow(sourceLines, record);
     const txt = buildTxtContent(translatedLines);
 
     const result = {
