@@ -35,25 +35,6 @@ export const apiFetch = async <T>(path: string, options: RequestInit = {}) => {
   return (await response.json()) as T;
 };
 
-export const uploadFile = async (file: File) => {
-  const form = new FormData();
-  form.append('file', file);
-
-  const token = getToken();
-  const response = await fetch(`${API_BASE}/api/files/upload`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body: form,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text);
-  }
-
-  return response.json();
-};
-
 export const runWorkflowStream = async (
   moduleKey: string,
   parameters: Record<string, unknown>,
@@ -80,7 +61,6 @@ export const runWorkflowStream = async (
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let hasDone = false;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -92,22 +72,13 @@ export const runWorkflowStream = async (
 
     for (const part of parts) {
       if (part.startsWith('event: done')) {
-        hasDone = true;
         onDone();
         continue;
       }
 
       if (part.startsWith('event: error')) {
-        if (hasDone) continue;
-        const messageLine = part.split('\n').find((line) => line.startsWith('data: '));
-        let msg = messageLine ? messageLine.replace('data: ', '') : '运行失败';
-        try {
-          const parsed = JSON.parse(msg) as { message?: string };
-          if (parsed?.message) msg = parsed.message;
-        } catch {
-          // ignore
-        }
-        onError(msg);
+        const line = part.split('\n').find((l) => l.startsWith('data: '));
+        onError(line ? line.replace('data: ', '') : '运行失败');
         continue;
       }
 
@@ -123,6 +94,40 @@ export const runWorkflowStream = async (
   }
 };
 
+export const translateLinesFromCopy = async (text: string) => {
+  return apiFetch<{
+    success: boolean;
+    data: {
+      sourceLines: string[];
+      translatedLines: string[];
+      txt: string;
+    };
+    debugId?: string;
+    debugUrl?: string;
+    debugListUrl?: string;
+  }>('/api/voice/translate-lines', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+};
+
+export const ttsFromLines = async (lines: string[]) => {
+  return apiFetch<{
+    success: boolean;
+    data: {
+      lines: string[];
+      txt: string;
+      tts: unknown;
+    };
+    debugId?: string;
+    debugUrl?: string;
+    debugListUrl?: string;
+  }>('/api/voice/tts-from-lines', {
+    method: 'POST',
+    body: JSON.stringify({ lines }),
+  });
+};
+
 export const getVoiceConfig = async () => {
   return apiFetch<{
     success: boolean;
@@ -132,18 +137,4 @@ export const getVoiceConfig = async () => {
       baseUrl: string;
     };
   }>('/api/voice/config');
-};
-
-export const translateLinesFromCopy = async (text: string) => {
-  return apiFetch<{
-    success: boolean;
-    data: {
-      sourceLines: string[];
-      translatedLines: string[];
-      txt: string;
-    };
-  }>('/api/voice/translate-lines', {
-    method: 'POST',
-    body: JSON.stringify({ text }),
-  });
 };
