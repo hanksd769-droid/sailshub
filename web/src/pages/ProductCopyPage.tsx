@@ -95,9 +95,12 @@ const ProductCopyPage = () => {
 
     try {
       const res = await translateLinesFromCopy(streamText);
-      const txt = res.data.txt || (res.data.translatedLines || []).join('\n');
 
-      setTranslatedText(txt); // 一行一句英文
+      // 关键：只取 translatedLines，每项一行
+      const lines = Array.isArray(res.data.translatedLines) ? res.data.translatedLines : [];
+      const oneLinePerItem = lines.map((x) => String(x).trim()).filter(Boolean).join('\n');
+
+      setTranslatedText(oneLinePerItem);
       setTranslatedJson(JSON.stringify(res.data, null, 2));
       message.success('英译完成（独立步骤）');
     } catch (error) {
@@ -117,7 +120,7 @@ const ProductCopyPage = () => {
             产品文案生成
           </Typography.Title>
           <Typography.Text type="secondary">
-            先生成文案，再独立执行英译（一行一句）
+            先生成文案，再独立执行英译（每行一条）
           </Typography.Text>
         </div>
       </div>
@@ -165,7 +168,7 @@ const ProductCopyPage = () => {
           type="info"
           showIcon
           message="当前阶段"
-          description="本页已拆分为独立英译步骤：先产出文案，再将 wenan_Array_string 翻译为英文，每行一句。后续再接入 TTS 批量+SRT。"
+          description="独立英译结果只显示 translatedLines 数组内容：每个元素一行。"
         />
 
         <ResultPanel
@@ -180,7 +183,7 @@ const ProductCopyPage = () => {
         />
 
         <ResultPanel
-          title="独立英译结果（每行一句）"
+          title="独立英译结果（每行一条）"
           streamText={translatedText || '等待英译结果...'}
           jsonText={translatedJson}
           loading={translateLoading}
