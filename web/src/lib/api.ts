@@ -1,6 +1,4 @@
-// 动态获取 API 基础地址
-// 优先使用环境变量，如果没有则使用相对路径（适用于同域名部署）
-const API_BASE = import.meta.env.VITE_API_BASE || '';
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000';
 
 let onUnauthorized: (() => void) | null = null;
 
