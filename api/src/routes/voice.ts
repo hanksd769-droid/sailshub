@@ -226,8 +226,11 @@ const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
     appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: true }));
     appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
 
-    // 上传txt文件到文件组件（使用handle_file包装文件路径）
-    appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: [handle_file(tmpFile)] }));
+    // 读取文件内容为Buffer，然后转换为Blob上传
+    const fileBuffer = await fs.readFile(tmpFile);
+    const fileBlob = new Blob([fileBuffer], { type: 'text/plain' });
+    const fileObject = new File([fileBlob], 'input.txt', { type: 'text/plain' });
+    appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: [fileObject] }));
 
     // 其他参数设置
     appendDebugStep(record, 'tts_lambda_4', await client.predict('/lambda_4', { value: true }));
