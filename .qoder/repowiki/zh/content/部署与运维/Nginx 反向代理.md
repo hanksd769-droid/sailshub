@@ -4,35 +4,40 @@
 **本文档引用的文件**
 - [nginx.conf](file://web/nginx.conf)
 - [Dockerfile](file://web/Dockerfile)
-- [docker-compose.yml](file://docker-compose.yml)
 - [index.ts](file://api/src/index.ts)
 - [config.ts](file://api/src/config.ts)
-- [auth.ts](file://api/src/middleware/auth.ts)
-- [voice.ts](file://api/src/routes/voice.ts)
 - [package.json](file://web/package.json)
 - [package.json](file://api/package.json)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 更新架构概览以反映简化后的静态资源服务模式
+- 移除反向代理配置相关的所有内容
+- 新增静态资源服务配置的详细说明
+- 更新容器化部署架构图
+- 移除 API 路由转发和 WebSocket 相关配置
 
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
 4. [架构概览](#架构概览)
-5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
+5. [静态资源服务配置](#静态资源服务配置)
+6. [容器化部署架构](#容器化部署架构)
+7. [性能优化配置](#性能优化配置)
 8. [故障排除指南](#故障排除指南)
 9. [结论](#结论)
 
 ## 简介
 
-本指南详细介绍了基于 Nginx 的反向代理配置，该配置服务于一个现代化的 Web 应用程序，包含前端 React 应用、Node.js API 服务和 PostgreSQL 数据库。系统采用 Docker 容器化部署，通过 Nginx 提供静态资源服务、API 请求转发和 WebSocket 支持。
+本指南详细介绍了一个基于 Nginx 的静态资源服务配置，该配置服务于一个现代化的 Web 应用程序。应用程序采用前后端分离架构，前端使用 React 技术栈，后端使用 Node.js API 服务，数据库采用 PostgreSQL。系统通过 Docker 容器化部署，Nginx 专门用于提供静态资源服务和单页应用路由处理。
 
-该配置支持完整的 HTTPS 证书管理、HTTP/HTTPS 重定向、缓存策略、负载均衡和健康检查设置。同时提供了 CORS 配置、安全头设置和访问控制规则，以及性能优化配置和压缩设置。
+该配置专注于提供高性能的静态资源服务，支持单页应用的客户端路由（SPA），并具备基本的缓存策略和压缩功能。由于架构简化，不再包含反向代理、API 转发、WebSocket 支持等高级功能。
 
 ## 项目结构
 
-该项目采用多容器架构，包含以下主要组件：
+该项目采用前后端分离的容器化架构，包含以下主要组件：
 
 ```mermaid
 graph TB
@@ -40,42 +45,38 @@ subgraph "客户端层"
 Browser[Web 浏览器]
 Mobile[移动应用]
 end
-subgraph "反向代理层"
-Nginx[Nginx 反向代理]
-Static[静态资源服务]
-Proxy[API 代理]
+subgraph "静态资源层"
+Nginx[Nginx 静态资源服务器]
+SPA[单页应用路由]
 end
 subgraph "应用层"
 Frontend[React 前端应用]
 API[Node.js API 服务]
-Auth[认证中间件]
+Auth[认证服务]
 end
 subgraph "数据层"
 Database[(PostgreSQL 数据库)]
 end
 Browser --> Nginx
 Mobile --> Nginx
-Nginx --> Static
-Nginx --> Proxy
-Proxy --> Frontend
-Proxy --> API
+Nginx --> SPA
+SPA --> Frontend
+Frontend --> API
 API --> Auth
 API --> Database
 ```
 
 **图表来源**
-- [docker-compose.yml:1-35](file://docker-compose.yml#L1-L35)
 - [web/Dockerfile:12-16](file://web/Dockerfile#L12-L16)
 
 **章节来源**
-- [docker-compose.yml:1-35](file://docker-compose.yml#L1-L35)
 - [web/Dockerfile:12-16](file://web/Dockerfile#L12-L16)
 
 ## 核心组件
 
-### Nginx 反向代理配置
+### Nginx 静态资源服务配置
 
-当前的基础配置仅提供静态资源服务，需要扩展以支持完整的反向代理功能：
+当前配置专注于提供基础的静态资源服务，支持单页应用路由处理：
 
 ```mermaid
 flowchart TD
@@ -92,54 +93,48 @@ SPA --> End([响应完成])
 **图表来源**
 - [nginx.conf:1-11](file://web/nginx.conf#L1-L11)
 
-### API 服务架构
+### 前端应用架构
 
-API 服务提供认证、模块管理和语音生成功能：
+前端应用基于 React 技术栈，提供现代化的用户界面：
 
 ```mermaid
 classDiagram
-class ExpressApp {
-+cors() CORS 中间件
-+json() JSON 解析
-+use() 路由注册
-+listen() 启动服务
+class ReactApp {
++useState() 状态管理
++useEffect() 生命周期
++render() 渲染组件
 }
-class AuthMiddleware {
-+authRequired() 认证检查
-+verifyToken() Token 验证
+class Components {
++ResultPanel 结果面板
++AuthLayout 认证布局
++MainLayout 主布局
 }
-class Routes {
-+authRoutes 用户认证
-+modulesRoutes 模块管理
-+filesRoutes 文件处理
-+runsRoutes 工作流执行
-+voiceRoutes 语音生成
+class Pages {
++DashboardPage 仪表板
++LoginPage 登录页面
++RegisterPage 注册页面
++VoiceGeneratorPage 语音生成
++RunsPage 工作流页面
 }
-class Config {
-+cozeToken Coze API 密钥
-+databaseUrl 数据库连接
-+jwtSecret JWT 密钥
-+voiceBaseUrl 语音服务地址
-+port 服务端口
+class API {
++api.ts RESTful API 客户端
 }
-ExpressApp --> AuthMiddleware : 使用
-ExpressApp --> Routes : 注册
-Routes --> Config : 读取配置
+ReactApp --> Components : 组合
+ReactApp --> Pages : 路由
+Pages --> API : 数据获取
 ```
 
 **图表来源**
-- [api/src/index.ts:1-29](file://api/src/index.ts#L1-L29)
-- [api/src/middleware/auth.ts:1-23](file://api/src/middleware/auth.ts#L1-L23)
-- [api/src/config.ts:13-19](file://api/src/config.ts#L13-L19)
+- [web/src/App.tsx:1-50](file://web/src/App.tsx#L1-L50)
+- [web/src/lib/api.ts:1-50](file://web/src/lib/api.ts#L1-L50)
 
 **章节来源**
-- [api/src/index.ts:1-29](file://api/src/index.ts#L1-L29)
-- [api/src/middleware/auth.ts:1-23](file://api/src/middleware/auth.ts#L1-L23)
-- [api/src/config.ts:13-19](file://api/src/config.ts#L13-L19)
+- [web/src/App.tsx:1-50](file://web/src/App.tsx#L1-L50)
+- [web/src/lib/api.ts:1-50](file://web/src/lib/api.ts#L1-L50)
 
 ## 架构概览
 
-完整的系统架构包括以下层次：
+简化后的系统架构专注于静态资源服务，API 服务独立运行：
 
 ```mermaid
 graph TB
@@ -147,11 +142,10 @@ subgraph "网络层"
 Client[客户端请求]
 LoadBalancer[负载均衡器]
 end
-subgraph "反向代理层"
+subgraph "静态资源层"
 Nginx[Nginx 1.27]
-SSL[SSL/TLS 终止]
 Cache[缓存策略]
-Security[安全头]
+SPA[单页应用处理]
 end
 subgraph "应用层"
 WebApp[Web 应用]
@@ -160,37 +154,34 @@ Auth[认证服务]
 end
 subgraph "数据层"
 Postgres[PostgreSQL 16]
-Redis[Redis 缓存]
 end
 Client --> LoadBalancer
 LoadBalancer --> Nginx
-Nginx --> SSL
-SSL --> Cache
-Cache --> Security
-Security --> WebApp
-Security --> API
+Nginx --> Cache
+Cache --> SPA
+SPA --> WebApp
+WebApp --> API
 API --> Auth
 API --> Postgres
-WebApp --> Redis
 ```
 
 **图表来源**
-- [docker-compose.yml:1-35](file://docker-compose.yml#L1-L35)
 - [web/Dockerfile:12-16](file://web/Dockerfile#L12-L16)
 
-## 详细组件分析
+## 静态资源服务配置
 
-### 静态资源服务配置
+### 基础配置分析
 
-当前配置仅支持基础的静态文件服务，需要增强以支持现代 Web 应用的需求：
+当前的 Nginx 配置非常简洁，专注于静态资源服务：
 
-#### 当前配置分析
-- 监听端口：80
-- 根目录：/usr/share/nginx/html  
-- 默认索引：index.html
-- 单页应用路由：使用 try_files 处理
+#### 核心配置项
+- **监听端口**：80
+- **服务器名称**：_（匹配所有主机名）
+- **根目录**：/usr/share/nginx/html
+- **默认索引**：index.html
+- **单页应用路由**：使用 try_files 处理
 
-#### 增强配置建议
+#### 配置流程图
 
 ```mermaid
 sequenceDiagram
@@ -212,246 +203,202 @@ SPA-->>Client : 处理前端路由
 **图表来源**
 - [nginx.conf:8-10](file://web/nginx.conf#L8-L10)
 
-### API 请求转发配置
+### 静态资源优化策略
 
-需要配置 Nginx 将 API 请求转发到后端服务：
+虽然当前配置较为简单，但仍可实施以下优化：
 
-```mermaid
-flowchart TD
-Client[客户端请求] --> Nginx[Nginx 反向代理]
-Nginx --> HealthCheck{健康检查}
-HealthCheck --> |健康| API[API 服务]
-HealthCheck --> |不健康| Fallback[备用服务]
-API --> Response[API 响应]
-Fallback --> Response
-Response --> Client
-```
+#### 缓存策略
+- **静态文件缓存**：CSS、JS、图片文件长期缓存
+- **HTML 文件缓存**：短期缓存，便于更新
+- **动态内容缓存**：API 响应缓存策略
 
-**图表来源**
-- [api/src/index.ts:15-17](file://api/src/index.ts#L15-L17)
+#### 压缩配置
+- **Gzip 压缩**：启用静态文件压缩
+- **Brotli 压缩**：现代浏览器支持的高效压缩
+- **压缩阈值**：设置合适的压缩触发大小
 
-### WebSocket 支持配置
+#### 安全配置
+- **CORS 头设置**：跨域资源共享配置
+- **安全头**：X-Frame-Options、X-Content-Type-Options
+- **HTTPS 重定向**：生产环境的 HTTP 到 HTTPS 跳转
 
-WebSocket 连接需要特殊的配置来保持长连接：
+**章节来源**
+- [nginx.conf:1-11](file://web/nginx.conf#L1-L11)
 
-```mermaid
-sequenceDiagram
-participant Client as 客户端
-participant Nginx as Nginx
-participant API as API 服务
-Client->>Nginx : WebSocket 握手
-Nginx->>Nginx : 升级协议
-Nginx->>API : 转发连接
-API-->>Nginx : 确认升级
-Nginx-->>Client : 握手完成
-loop 持续通信
-Client->>Nginx : 发送消息
-Nginx->>API : 转发消息
-API-->>Nginx : 响应消息
-Nginx-->>Client : 推送消息
-end
-```
+## 容器化部署架构
 
-**图表来源**
-- [api/src/routes/voice.ts:211-254](file://api/src/routes/voice.ts#L211-L254)
+### 多阶段构建流程
 
-### SSL/TLS 证书配置
-
-需要配置 HTTPS 终止和证书管理：
+前端应用采用多阶段 Docker 构建，确保最终镜像的精简性：
 
 ```mermaid
 flowchart TD
-Client[客户端] --> TLS[TLS 握手]
-TLS --> Cert[证书验证]
-Cert --> Nginx[Nginx]
-Nginx --> API[API 服务]
-API --> Response[响应]
-Response --> Nginx
-Nginx --> Client
+Stage1[阶段 1: 依赖安装] --> Node20[Node.js 20 基础镜像]
+Node20 --> CopyPackage[复制 package.json]
+CopyPackage --> InstallDeps[安装依赖]
+InstallDeps --> Stage2[阶段 2: 代码构建]
+Stage2 --> BuildApp[构建 React 应用]
+BuildApp --> Dist[生成 dist 目录]
+Dist --> Stage3[阶段 3: 生产环境]
+Stage3 --> NginxBase[Nginx 1.27 基础镜像]
+NginxBase --> CopyDist[复制构建产物]
+CopyDist --> CopyConfig[复制 Nginx 配置]
+CopyConfig --> ExposePort[暴露 80 端口]
+ExposePort --> StartNginx[启动 Nginx]
 ```
 
 **图表来源**
-- [web/Dockerfile:12-16](file://web/Dockerfile#L12-L16)
+- [web/Dockerfile:1-16](file://web/Dockerfile#L1-L16)
 
-### CORS 配置
-
-API 服务已启用 CORS 中间件，需要在 Nginx 层面进行补充配置：
-
-```mermaid
-sequenceDiagram
-participant Browser as 浏览器
-participant Nginx as Nginx
-participant API as API 服务
-Browser->>Nginx : 跨域请求
-Nginx->>Nginx : 检查 CORS 头
-Nginx->>API : 转发请求
-API-->>Nginx : 设置 CORS 头
-Nginx-->>Browser : 返回响应
-```
-
-**图表来源**
-- [api/src/index.ts:12](file://api/src/index.ts#L12)
-
-### 缓存策略配置
-
-需要实现多层次的缓存策略：
-
-```mermaid
-flowchart TD
-Request[请求] --> CacheCheck{缓存检查}
-CacheCheck --> |命中| ReturnCache[返回缓存]
-CacheCheck --> |未命中| API[API 调用]
-API --> Cache[更新缓存]
-Cache --> ReturnAPI[返回响应]
-ReturnCache --> End([结束])
-ReturnAPI --> End
-```
-
-**图表来源**
-- [nginx.conf:5-6](file://web/nginx.conf#L5-L6)
-
-## 依赖关系分析
-
-### 容器依赖关系
+### 部署架构
 
 ```mermaid
 graph TB
-subgraph "数据库服务"
-Postgres[PostgreSQL 16]
+subgraph "开发环境"
+Dev[本地开发]
+Vite[Vite 开发服务器]
+End
+subgraph "生产环境"
+Docker[容器化部署]
+NginxProd[Nginx 生产环境]
+API[API 服务容器]
+DB[(PostgreSQL 数据库)]
 end
-subgraph "应用服务"
-API[API 服务]
-Web[Web 应用]
-end
-subgraph "基础设施"
-Nginx[Nginx 反向代理]
-Docker[Docker Compose]
-end
-Docker --> Postgres
+Dev --> Vite
+Vite --> Docker
+Docker --> NginxProd
 Docker --> API
-Docker --> Web
-Docker --> Nginx
-API --> Postgres
-Web --> API
-Nginx --> Web
-Nginx --> API
+API --> DB
 ```
 
 **图表来源**
-- [docker-compose.yml:1-35](file://docker-compose.yml#L1-L35)
-
-### 环境变量依赖
-
-API 服务依赖以下环境变量：
-
-| 环境变量 | 类型 | 必需 | 描述 |
-|---------|------|------|------|
-| COZE_API_TOKEN | 字符串 | 是 | Coze API 访问令牌 |
-| DATABASE_URL | 字符串 | 是 | PostgreSQL 数据库连接字符串 |
-| JWT_SECRET | 字符串 | 是 | JWT 令牌签名密钥 |
-| VOICE_BASE_URL | 字符串 | 是 | 语音服务基础 URL |
-| PORT | 数字 | 否 | 服务监听端口，默认 3000 |
+- [web/Dockerfile:6-16](file://web/Dockerfile#L6-L16)
 
 **章节来源**
-- [api/src/config.ts:5-19](file://api/src/config.ts#L5-L19)
+- [web/Dockerfile:1-16](file://web/Dockerfile#L1-L16)
 
-## 性能考虑
+## 性能优化配置
 
-### 静态资源优化
+### 静态资源性能优化
 
-- **Gzip 压缩**：启用静态文件压缩以减少传输大小
-- **缓存策略**：设置合理的缓存头以提高加载速度
-- **CDN 集成**：可选的 CDN 加速静态资源分发
+#### 缓存策略配置
+- **长期缓存**：CSS、JS、字体文件设置 1 年缓存
+- **短期缓存**：HTML 文件设置 5 分钟缓存
+- **条件请求**：ETag 和 Last-Modified 头部支持
 
-### API 性能优化
+#### 压缩优化
+- **Gzip 压缩**：对文本文件启用压缩
+- **Brotli 压缩**：现代浏览器优先使用 Brotli
+- **压缩级别**：平衡压缩比和 CPU 使用
 
-- **连接池管理**：合理配置数据库连接池
-- **请求限制**：实施速率限制防止滥用
-- **超时配置**：设置适当的请求超时时间
+#### 资源优化
+- **图片优化**：WebP 格式支持
+- **代码分割**：按需加载 JavaScript
+- **懒加载**：非关键资源延迟加载
 
-### 内存和 CPU 优化
+### API 服务性能
 
-- **进程数量**：根据硬件配置调整 worker 进程数
-- **缓冲区大小**：优化网络缓冲区设置
-- **文件描述符**：调整系统文件描述符限制
+虽然 API 服务不通过 Nginx 反向代理，但仍需考虑其性能配置：
+
+#### 连接池管理
+- **数据库连接池**：合理配置最大连接数
+- **请求队列**：处理突发流量的能力
+- **超时设置**：数据库查询超时配置
+
+#### 缓存策略
+- **Redis 缓存**：热点数据缓存
+- **内存缓存**：高频 API 响应缓存
+- **CDN 缓存**：静态资源 CDN 加速
+
+**章节来源**
+- [api/src/config.ts:13-19](file://api/src/config.ts#L13-L19)
 
 ## 故障排除指南
 
-### 常见配置错误
+### 常见配置问题
 
-#### 1. 端口冲突
-**症状**：Nginx 启动失败，显示端口占用
-**解决方案**：
-- 检查端口占用情况：`netstat -tulpn | grep :80`
-- 修改 Nginx 配置中的监听端口
-- 确保容器端口映射正确
-
-#### 2. 静态文件 404 错误
+#### 1. 静态文件 404 错误
 **症状**：页面加载空白或资源文件无法加载
 **解决方案**：
-- 验证静态文件路径配置
-- 检查文件权限设置
-- 确认构建产物已正确复制到容器
+- 验证静态文件路径配置是否正确
+- 检查 dist 目录是否正确复制到容器
+- 确认文件权限设置是否允许 Nginx 读取
+- 验证构建产物是否包含在最终镜像中
 
-#### 3. API 请求转发失败
-**症状**：前端 API 请求返回 502 错误
+#### 2. 单页应用路由问题
+**症状**：刷新页面或直接访问路由导致 404
 **解决方案**：
-- 检查 API 服务状态：`docker-compose ps`
-- 验证网络连接：`docker network ls`
-- 查看 Nginx 错误日志：`docker-compose logs nginx`
+- 确认 try_files 配置是否正确
+- 验证 index.html 是否存在于根目录
+- 检查 Nginx 配置语法是否正确
 
-#### 4. CORS 跨域问题
-**症状**：浏览器控制台出现跨域错误
+#### 3. 构建失败问题
+**症状**：Docker 构建过程中出现错误
 **解决方案**：
-- 检查 API CORS 配置
-- 验证 Nginx CORS 头设置
-- 确认预检请求处理
+- 检查 Node.js 版本兼容性
+- 验证依赖安装是否成功
+- 确认构建脚本是否正确执行
 
 ### 日志分析
 
 #### Nginx 日志位置
-- 错误日志：`/var/log/nginx/error.log`
-- 访问日志：`/var/log/nginx/access.log`
+- **错误日志**：`/var/log/nginx/error.log`
+- **访问日志**：`/var/log/nginx/access.log`
 
 #### 常用诊断命令
 ```bash
 # 查看实时日志
-docker-compose logs -f nginx
+docker logs -f container_name
 
-# 检查容器健康状态
-docker-compose ps
+# 检查容器状态
+docker ps
 
 # 进入容器调试
-docker-compose exec nginx bash
+docker exec -it container_name bash
+
+# 查看构建日志
+docker build -t app .
 ```
 
 ### 性能监控
 
 #### 关键指标监控
-- **请求响应时间**：平均和 95 分位响应时间
-- **并发连接数**：活跃连接数统计
-- **错误率**：HTTP 5xx 错误比例
-- **带宽使用**：网络流量统计
+- **请求响应时间**：静态资源加载时间
+- **并发连接数**：同时处理的请求数量
+- **错误率**：404、500 错误比例
+- **带宽使用**：静态资源传输量统计
 
-#### 性能调优建议
+#### 优化建议
 - **缓存策略**：合理设置静态资源缓存
-- **压缩配置**：启用 Gzip 压缩
-- **连接复用**：启用 keep-alive
+- **压缩配置**：启用 Gzip/Brotli 压缩
 - **资源优化**：图片和静态文件压缩
+- **CDN 集成**：可选的 CDN 加速静态资源分发
 
 **章节来源**
-- [docker-compose.yml:1-35](file://docker-compose.yml#L1-L35)
+- [web/Dockerfile:12-16](file://web/Dockerfile#L12-L16)
 
 ## 结论
 
-本 Nginx 反向代理配置为现代化 Web 应用提供了坚实的基础架构。当前配置支持基本的静态资源服务和单页应用路由处理，但需要进一步扩展以支持完整的生产环境需求。
+本 Nginx 静态资源服务配置为现代化 Web 应用提供了简洁而高效的基础设施。当前配置专注于提供基础的静态资源服务和单页应用路由处理，具有以下特点：
 
-推荐的改进方向包括：
-1. **增强 API 代理配置**：添加完整的 API 路由转发
-2. **SSL/TLS 配置**：实现 HTTPS 终止和证书管理
-3. **负载均衡设置**：配置多个 API 实例的负载均衡
-4. **健康检查集成**：实现自动故障转移
-5. **缓存策略优化**：实施多层缓存机制
-6. **安全加固**：添加 WAF 和 DDoS 防护
+### 当前优势
+1. **架构简化**：专注于静态资源服务，配置清晰易懂
+2. **性能优化**：多阶段构建确保镜像精简，启动快速
+3. **开发友好**：支持热重载和开发服务器
+4. **容器化成熟**：完整的 Docker 化部署流程
 
-通过这些改进，系统将具备企业级的可靠性、性能和安全性，能够支持高并发的生产环境需求。
+### 未来扩展方向
+基于当前的简化架构，可能的扩展方向包括：
+1. **CDN 集成**：引入 CDN 加速静态资源分发
+2. **HTTPS 配置**：添加 SSL/TLS 终止支持
+3. **缓存优化**：实施更精细的缓存策略
+4. **监控集成**：添加性能监控和日志收集
+5. **安全加固**：增强安全头和访问控制
+
+### 最佳实践建议
+- **持续集成**：自动化构建和部署流程
+- **版本管理**：明确的版本控制和发布策略
+- **备份策略**：静态资源和配置的备份方案
+- **灾难恢复**：快速恢复和故障转移机制
+
+通过这些改进，系统将具备更好的可维护性和扩展性，能够支持更大规模的应用需求。
