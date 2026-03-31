@@ -15,13 +15,13 @@
 - [api/src/routes/runs.ts](file://api/src/routes/runs.ts)
 - [api/src/routes/voice.ts](file://api/src/routes/voice.ts)
 - [api/package.json](file://api/package.json)
-- [docker-compose.yml](file://docker-compose.yml)
 - [web/src/lib/api.ts](file://web/src/lib/api.ts)
 - [web/src/pages/VoiceGeneratorPage.tsx](file://web/src/pages/VoiceGeneratorPage.tsx)
 </cite>
 
 ## 更新摘要
 **变更内容**
+- 语音接口实现细节更新：TTS 生成接口现在使用直接文本输入而非文件上传，提高了可靠性
 - 新增 @gradio/client 依赖，支持 Gradio 语音服务集成
 - 语音生成接口重构，从纯 Coze 工作流转向 Gradio 客户端驱动
 - 增加语音调试记录功能，支持详细的步骤追踪
@@ -100,7 +100,7 @@ PAGE --> WEBAPI
 - [api/src/routes/modules.ts:1-20](file://api/src/routes/modules.ts#L1-L20)
 - [api/src/routes/files.ts:1-43](file://api/src/routes/files.ts#L1-L43)
 - [api/src/routes/runs.ts:1-159](file://api/src/routes/runs.ts#L1-L159)
-- [api/src/routes/voice.ts:1-404](file://api/src/routes/voice.ts#L1-L404)
+- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
 - [api/src/middleware/auth.ts:1-23](file://api/src/middleware/auth.ts#L1-L23)
 - [api/src/config.ts:1-19](file://api/src/config.ts#L1-L19)
 - [api/src/db.ts:1-35](file://api/src/db.ts#L1-L35)
@@ -112,7 +112,6 @@ PAGE --> WEBAPI
 
 **章节来源**
 - [api/src/index.ts:1-29](file://api/src/index.ts#L1-L29)
-- [docker-compose.yml:1-35](file://docker-compose.yml#L1-L35)
 
 ## 核心组件
 - 应用入口与路由挂载：在入口文件中启用 CORS、JSON 解析、健康检查，并将各子路由挂载至 /api/*。
@@ -176,7 +175,7 @@ API-->>FE : "返回 TTS 结果"
 **图表来源**
 - [api/src/routes/auth.ts:1-115](file://api/src/routes/auth.ts#L1-L115)
 - [api/src/routes/runs.ts:1-159](file://api/src/routes/runs.ts#L1-L159)
-- [api/src/routes/voice.ts:1-404](file://api/src/routes/voice.ts#L1-L404)
+- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
 - [api/src/middleware/auth.ts:1-23](file://api/src/middleware/auth.ts#L1-L23)
 - [api/src/db.ts:1-35](file://api/src/db.ts#L1-L35)
 - [api/src/coze.ts:1-8](file://api/src/coze.ts#L1-L8)
@@ -255,7 +254,6 @@ A-->>C : "{ token }"
 - 获取指定模块
   - 方法与路径：GET /api/modules/:key
   - 成功响应：{ success: true, data: ModuleInfo }
-  - 失败场景：模块不存在（404）
 - 运行工作流（SSE）
   - 方法与路径：POST /api/runs/:key/run
   - 请求头：Authorization: Bearer {token}, Content-Type: application/json
@@ -332,7 +330,7 @@ Parse --> Done["返回 {success:true,data}"]
 - [api/src/config.ts:1-19](file://api/src/config.ts#L1-L19)
 
 ### 语音接口
-**更新** 语音接口现已集成 @gradio/client，提供更强大的语音生成能力。
+**更新** 语音接口现已集成 @gradio/client，提供更强大的语音生成能力。TTS 生成接口现在使用直接文本输入而非文件上传，提高了可靠性。
 
 - 获取语音服务配置
   - 方法与路径：GET /api/voice/config
@@ -372,18 +370,18 @@ FE->>V : "POST /api/voice/tts-from-lines"
 V->>G : "Client.connect(VOICE_BASE_URL)"
 G-->>V : "连接语音服务"
 V->>G : "predict('/lambda', {value : true})"
-V->>G : "predict('/lambda_2', {value : [handle_file(tmpFile)]})"
-V->>G : "predict('/generate_audio', {})"
+V->>G : "predict('/lambda_1', {value : true})"
+V->>G : "predict('/lambda_3', {value : txt}) // 直接传入文本"
 G-->>V : "返回音频文件/字幕"
 V-->>FE : "返回 {lines, txt, tts}"
 ```
 
 **图表来源**
-- [api/src/routes/voice.ts:1-404](file://api/src/routes/voice.ts#L1-L404)
+- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
 - [api/src/coze.ts:1-8](file://api/src/coze.ts#L1-L8)
 
 **章节来源**
-- [api/src/routes/voice.ts:1-404](file://api/src/routes/voice.ts#L1-L404)
+- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
 
 ### 数据模型
 - 用户表 users
@@ -499,10 +497,10 @@ PAGE["web/src/pages/VoiceGeneratorPage.tsx"] --> FE
 - [api/src/routes/auth.ts:1-115](file://api/src/routes/auth.ts#L1-L115)
 - [api/src/routes/runs.ts:1-159](file://api/src/routes/runs.ts#L1-L159)
 - [api/src/routes/files.ts:1-43](file://api/src/routes/files.ts#L1-L43)
-- [api/src/routes/voice.ts:1-404](file://api/src/routes/voice.ts#L1-L404)
+- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
 
 ## 结论
-本 API 文档覆盖了认证、工作流、文件、运行（SSE）与语音（翻译/TTS）的完整接口规范。通过明确的请求/响应结构、认证方式与错误处理策略，结合调试与监控建议，可帮助开发者快速集成与稳定运行。**最新更新**集成了 @gradio/client，提供了更强大的语音生成能力，建议在现有分层架构上新增路由与中间件，保持一致的错误与响应格式。
+本 API 文档覆盖了认证、工作流、文件、运行（SSE）与语音（翻译/TTS）的完整接口规范。通过明确的请求/响应结构、认证方式与错误处理策略，结合调试与监控建议，可帮助开发者快速集成与稳定运行。**最新更新**集成了 @gradio/client，提供了更强大的语音生成能力，TTS 生成接口现在使用直接文本输入而非文件上传，显著提高了可靠性。建议在现有分层架构上新增路由与中间件，保持一致的错误与响应格式。
 
 ## 附录
 
@@ -563,9 +561,9 @@ PAGE["web/src/pages/VoiceGeneratorPage.tsx"] --> FE
 - **调试记录包含：** 输入参数、中间步骤、输出结果、错误信息与时间戳
 
 **章节来源**
-- [api/src/routes/voice.ts:256-273](file://api/src/routes/voice.ts#L256-L273)
-- [api/src/routes/voice.ts:275-341](file://api/src/routes/voice.ts#L275-L341)
-- [api/src/routes/voice.ts:343-402](file://api/src/routes/voice.ts#L343-L402)
+- [api/src/routes/voice.ts:243-260](file://api/src/routes/voice.ts#L243-L260)
+- [api/src/routes/voice.ts:262-328](file://api/src/routes/voice.ts#L262-L328)
+- [api/src/routes/voice.ts:330-389](file://api/src/routes/voice.ts#L330-L389)
 
 ### Gradio 语音服务集成
 **新增** 语音接口现集成了 @gradio/client，提供以下功能：
@@ -576,5 +574,5 @@ PAGE["web/src/pages/VoiceGeneratorPage.tsx"] --> FE
 - 支持多种语音参数配置
 
 **章节来源**
-- [api/src/routes/voice.ts:1-404](file://api/src/routes/voice.ts#L1-L404)
+- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
 - [api/src/config.ts:1-19](file://api/src/config.ts#L1-L19)
