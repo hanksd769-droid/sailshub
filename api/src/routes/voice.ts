@@ -2,7 +2,9 @@ import { Router, type Request, type Response } from 'express';
 import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
-import { Client } from '@gradio/client';
+import { Client, handle_file } from '@gradio/client';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 const router = Router();
 
@@ -211,15 +213,20 @@ const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
 
   const client = await Client.connect(base);
 
-  appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length });
+  // 创建临时txt文件
+  const tempDir = path.join(process.cwd(), 'temp');
+  await fs.mkdir(tempDir, { recursive: true });
+  const tmpFile = path.join(tempDir, `voice-${Date.now()}.txt`);
+  await fs.writeFile(tmpFile, txt, 'utf-8');
 
-  // 关闭批量处理模式（使用单条文本模式，避免文件上传问题）
-  appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: false }));
-  // 仍然导出SRT
+  appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length, tmpFile });
+
+  // 启用批量处理 + 导出SRT
+  appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: true }));
   appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
 
-  // 直接传入文本（不通过文件上传）
-  appendDebugStep(record, 'tts_lambda_3', await client.predict('/lambda_3', { value: txt }));
+  // 上传txt文件（使用handle_file，传入文件路径字符串）
+  appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: handle_file(tmpFile) }));
 
   // 其他参数设置
   appendDebugStep(record, 'tts_lambda_4', await client.predict('/lambda_4', { value: true }));
