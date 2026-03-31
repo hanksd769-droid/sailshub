@@ -2,6 +2,10 @@ import { Router, type Request, type Response } from 'express';
 import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
+import { Client, handle_file } from '@gradio/client';
+import { promises as fs } from 'fs';
+import os from 'os';
+import path from 'path';
 
 const router = Router();
 
@@ -25,6 +29,7 @@ type DebugRecord = {
 const debugStore = new Map<string, DebugRecord>();
 const MAX_DEBUG_RECORDS = 50;
 
+// 你提供的新批量翻译 workflow
 const BULK_TRANSLATION_WORKFLOW_ID = '7622189167463678015';
 
 const createDebugRecord = (input: DebugRecord['input']) => {
@@ -203,6 +208,51 @@ const translateByBulkWorkflow = async (sourceLines: string[], record: DebugRecor
 
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
+const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
+  const base = getVoiceBaseUrl();
+  if (!base) throw new Error('VOICE_BASE_URL 未配置');
+
+  const client = await Client.connect(base);
+
+  const tmpFile = path.join(os.tmpdir(), `voice-${Date.now()}.txt`);
+  await fs.writeFile(tmpFile, txt, 'utf-8');
+
+  try {
+    appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length });
+
+    // 批量 + 导出SRT
+    appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: true }));
+    appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
+
+    // 上传文件组件（ListFiles）
+    appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: [handle_file(tmpFile)] }));
+
+    // 兜底：直接写入文本组件，防止 file type 问题影响输入
+    appendDebugStep(record, 'tts_lambda_3', await client.predict('/lambda_3', { value: txt }));
+
+    // 你录制器中的参数终值
+    appendDebugStep(record, 'tts_lambda_4', await client.predict('/lambda_4', { value: true }));
+    appendDebugStep(record, 'tts_lambda_5', await client.predict('/lambda_5', { value: 200 }));
+    appendDebugStep(record, 'tts_lambda_14', await client.predict('/lambda_14', { value: 0 }));
+    appendDebugStep(
+      record,
+      'tts_handle_enhance_audio_change',
+      await client.predict('/handle_enhance_audio_change', { value: true })
+    );
+    appendDebugStep(record, 'tts_lambda_20', await client.predict('/lambda_20', { value: true }));
+    appendDebugStep(record, 'tts_lambda_21', await client.predict('/lambda_21', { value: 'RK4' }));
+    appendDebugStep(record, 'tts_lambda_22', await client.predict('/lambda_22', { value: 128 }));
+    appendDebugStep(record, 'tts_lambda_23', await client.predict('/lambda_23', { value: 0.64 }));
+
+    const result = await client.predict('/generate_audio', {});
+    appendDebugStep(record, 'tts_generate_audio', result);
+
+    return result;
+  } finally {
+    await fs.unlink(tmpFile).catch(() => {});
+  }
+};
+
 router.get('/debug/:id', authRequired, (req: Request, res: Response) => {
   const record = debugStore.get(req.params.id);
   if (!record) {
@@ -222,11 +272,9 @@ router.get('/debug', authRequired, (_req: Request, res: Response) => {
   return res.json({ success: true, data: list });
 });
 
+// 独立英译
 router.post('/translate-lines', authRequired, async (req: Request, res: Response) => {
-  const { lines, text } = req.body as {
-    lines?: string[];
-    text?: string;
-  };
+  const { lines, text } = req.body as { lines?: string[]; text?: string };
 
   const record = createDebugRecord({
     lines,
@@ -264,12 +312,7 @@ router.post('/translate-lines', authRequired, async (req: Request, res: Response
     const translatedLines = await translateByBulkWorkflow(sourceLines, record);
     const txt = buildTxtContent(translatedLines);
 
-    const result = {
-      sourceLines,
-      translatedLines,
-      txt,
-    };
-
+    const result = { sourceLines, translatedLines, txt };
     record.result = result;
     appendDebugStep(record, 'final_result', result);
 
@@ -282,10 +325,68 @@ router.post('/translate-lines', authRequired, async (req: Request, res: Response
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : '英译失败';
-    const errorPayload = {
+    const errorPayload = { message, stack: error instanceof Error ? error.stack : undefined };
+
+    record.error = errorPayload;
+    appendDebugStep(record, 'error', errorPayload);
+
+    return res.status(500).json({
+      success: false,
       message,
-      stack: error instanceof Error ? error.stack : undefined,
+      debugId: record.id,
+      debugUrl: `/api/voice/debug/${record.id}`,
+      debugListUrl: '/api/voice/debug',
+    });
+  }
+});
+
+// 新增：根据 translatedLines 直接生成语音（MP3+SRT）
+router.post('/tts-from-lines', authRequired, async (req: Request, res: Response) => {
+  const { lines } = req.body as { lines?: string[] };
+
+  const record = createDebugRecord({ lines });
+
+  try {
+    const sourceLines = Array.isArray(lines)
+      ? lines.map((x) => String(x).trim()).filter(Boolean)
+      : [];
+
+    if (!sourceLines.length) {
+      const errorPayload = { message: '缺少 lines 参数（英文数组）' };
+      record.error = errorPayload;
+      appendDebugStep(record, 'error', errorPayload);
+      return res.status(400).json({
+        success: false,
+        message: errorPayload.message,
+        debugId: record.id,
+        debugUrl: `/api/voice/debug/${record.id}`,
+      });
+    }
+
+    appendDebugStep(record, 'tts_source_lines', sourceLines);
+    const txt = buildTxtContent(sourceLines);
+
+    const ttsResult = await runTtsFromTxt(txt, record);
+
+    const result = {
+      lines: sourceLines,
+      txt,
+      tts: ttsResult,
     };
+
+    record.result = result;
+    appendDebugStep(record, 'tts_final_result', result);
+
+    return res.json({
+      success: true,
+      data: result,
+      debugId: record.id,
+      debugUrl: `/api/voice/debug/${record.id}`,
+      debugListUrl: '/api/voice/debug',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'TTS 生成失败';
+    const errorPayload = { message, stack: error instanceof Error ? error.stack : undefined };
 
     record.error = errorPayload;
     appendDebugStep(record, 'error', errorPayload);
