@@ -249,10 +249,14 @@ const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
     const result = await client.predict('/generate_audio', {});
     appendDebugStep(record, 'tts_generate_audio', result);
 
+    // 调试：不删除临时文件，方便查看
+    appendDebugStep(record, 'tts_temp_file_saved', { tmpFile });
+
     return result;
-  } finally {
-    // 清理临时文件
-    await fs.unlink(tmpFile).catch(() => {});
+  } catch (error) {
+    // 出错时保留临时文件用于调试
+    appendDebugStep(record, 'tts_error_keep_file', { tmpFile, error: String(error) });
+    throw error;
   }
 };
 
