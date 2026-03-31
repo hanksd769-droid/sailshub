@@ -2,9 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
-import { Client, handle_file } from '@gradio/client';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { Client } from '@gradio/client';
 
 const router = Router();
 
@@ -213,51 +211,34 @@ const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
 
   const client = await Client.connect(base);
 
-  // 创建临时txt文件（使用项目目录下的temp文件夹）
-  const tempDir = path.join(process.cwd(), 'temp');
-  await fs.mkdir(tempDir, { recursive: true });
-  const tmpFile = path.join(tempDir, `voice-${Date.now()}.txt`);
-  await fs.writeFile(tmpFile, txt, 'utf-8');
+  appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length });
 
-  try {
-    appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length, tmpFile });
+  // 关闭批量处理模式（使用单条文本模式，避免文件上传问题）
+  appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: false }));
+  // 仍然导出SRT
+  appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
 
-    // 启用批量处理 + 导出SRT
-    appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: true }));
-    appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
+  // 直接传入文本（不通过文件上传）
+  appendDebugStep(record, 'tts_lambda_3', await client.predict('/lambda_3', { value: txt }));
 
-    // 读取文件内容为Buffer，然后转换为Blob上传
-    const fileBuffer = await fs.readFile(tmpFile);
-    const fileBlob = new Blob([fileBuffer], { type: 'text/plain' });
-    const fileObject = new File([fileBlob], 'input.txt', { type: 'text/plain' });
-    appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: [fileObject] }));
+  // 其他参数设置
+  appendDebugStep(record, 'tts_lambda_4', await client.predict('/lambda_4', { value: true }));
+  appendDebugStep(record, 'tts_lambda_5', await client.predict('/lambda_5', { value: 200 }));
+  appendDebugStep(record, 'tts_lambda_14', await client.predict('/lambda_14', { value: 0 }));
+  appendDebugStep(
+    record,
+    'tts_handle_enhance_audio_change',
+    await client.predict('/handle_enhance_audio_change', { value: true })
+  );
+  appendDebugStep(record, 'tts_lambda_20', await client.predict('/lambda_20', { value: true }));
+  appendDebugStep(record, 'tts_lambda_21', await client.predict('/lambda_21', { value: 'RK4' }));
+  appendDebugStep(record, 'tts_lambda_22', await client.predict('/lambda_22', { value: 128 }));
+  appendDebugStep(record, 'tts_lambda_23', await client.predict('/lambda_23', { value: 0.64 }));
 
-    // 其他参数设置
-    appendDebugStep(record, 'tts_lambda_4', await client.predict('/lambda_4', { value: true }));
-    appendDebugStep(record, 'tts_lambda_5', await client.predict('/lambda_5', { value: 200 }));
-    appendDebugStep(record, 'tts_lambda_14', await client.predict('/lambda_14', { value: 0 }));
-    appendDebugStep(
-      record,
-      'tts_handle_enhance_audio_change',
-      await client.predict('/handle_enhance_audio_change', { value: true })
-    );
-    appendDebugStep(record, 'tts_lambda_20', await client.predict('/lambda_20', { value: true }));
-    appendDebugStep(record, 'tts_lambda_21', await client.predict('/lambda_21', { value: 'RK4' }));
-    appendDebugStep(record, 'tts_lambda_22', await client.predict('/lambda_22', { value: 128 }));
-    appendDebugStep(record, 'tts_lambda_23', await client.predict('/lambda_23', { value: 0.64 }));
+  const result = await client.predict('/generate_audio', {});
+  appendDebugStep(record, 'tts_generate_audio', result);
 
-    const result = await client.predict('/generate_audio', {});
-    appendDebugStep(record, 'tts_generate_audio', result);
-
-    // 调试：不删除临时文件，方便查看
-    appendDebugStep(record, 'tts_temp_file_saved', { tmpFile });
-
-    return result;
-  } catch (error) {
-    // 出错时保留临时文件用于调试
-    appendDebugStep(record, 'tts_error_keep_file', { tmpFile, error: String(error) });
-    throw error;
-  }
+  return result;
 };
 
 router.get('/debug/:id', authRequired, (req: Request, res: Response) => {
