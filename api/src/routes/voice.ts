@@ -2,14 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
-import { Client, handle_file } from '@gradio/client';
-import { promises as fs } from 'fs';
-import os from 'os';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { Client } from '@gradio/client';
 
 const router = Router();
 
@@ -218,26 +211,14 @@ const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
 
   const client = await Client.connect(base);
 
-  // 使用项目目录下的 temp 文件夹，确保有写入权限
-  const tempDir = path.join(process.cwd(), 'temp');
-  await fs.mkdir(tempDir, { recursive: true });
-  const tmpFile = path.join(tempDir, `voice-${Date.now()}.txt`);
-  await fs.writeFile(tmpFile, txt, 'utf-8');
+  appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length });
 
-  try {
-    appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length });
+  // 批量 + 导出SRT
+  appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: true }));
+  appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
 
-    // 批量 + 导出SRT
-    appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: true }));
-    appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
-
-    // 上传文件组件（ListFiles）- 使用正确的文件对象格式
-    const fileBlob = await fs.readFile(tmpFile);
-    const fileObject = new File([fileBlob], 'input.txt', { type: 'text/plain' });
-    appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: [handle_file(fileObject)] }));
-
-    // 兜底：直接写入文本组件，防止 file type 问题影响输入
-    appendDebugStep(record, 'tts_lambda_3', await client.predict('/lambda_3', { value: txt }));
+  // 直接传入文本（不通过文件上传，避免 Unsupported file type 警告）
+  appendDebugStep(record, 'tts_lambda_3', await client.predict('/lambda_3', { value: txt }));
 
     // 你录制器中的参数终值
     appendDebugStep(record, 'tts_lambda_4', await client.predict('/lambda_4', { value: true }));
@@ -257,9 +238,6 @@ const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
     appendDebugStep(record, 'tts_generate_audio', result);
 
     return result;
-  } finally {
-    await fs.unlink(tmpFile).catch(() => {});
-  }
 };
 
 router.get('/debug/:id', authRequired, (req: Request, res: Response) => {
