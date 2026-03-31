@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
-import { Client, handle_file } from '@gradio/client';
+import { Client } from '@gradio/client';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -225,8 +225,10 @@ const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
   appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: true }));
   appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
 
-  // 上传txt文件（使用handle_file，传入文件路径字符串）
-  appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: handle_file(tmpFile) }));
+  // 读取文件并创建File对象上传（确保文件名以.txt结尾）
+  const fileBuffer = await fs.readFile(tmpFile);
+  const fileObject = new File([fileBuffer], 'input.txt', { type: 'text/plain' });
+  appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: [fileObject] }));
 
   // 其他参数设置
   appendDebugStep(record, 'tts_lambda_4', await client.predict('/lambda_4', { value: true }));
