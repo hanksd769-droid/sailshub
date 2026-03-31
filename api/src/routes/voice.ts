@@ -3,8 +3,6 @@ import { authRequired } from '../middleware/auth';
 import { config } from '../config';
 import { cozeClient } from '../coze';
 import { Client } from '@gradio/client';
-import { promises as fs } from 'fs';
-import path from 'path';
 
 const router = Router();
 
@@ -207,28 +205,21 @@ const translateByBulkWorkflow = async (sourceLines: string[], record: DebugRecor
 
 const buildTxtContent = (lines: string[]) => lines.join('\n');
 
-const runTtsFromTxt = async (txt: string, record: DebugRecord) => {
+const runTtsFromTxt = async (txt: string, record: DebugRecord, isBatch: boolean = false) => {
   const base = getVoiceBaseUrl();
   if (!base) throw new Error('VOICE_BASE_URL 未配置');
 
   const client = await Client.connect(base);
 
-  // 创建临时txt文件
-  const tempDir = path.join(process.cwd(), 'temp');
-  await fs.mkdir(tempDir, { recursive: true });
-  const tmpFile = path.join(tempDir, `voice-${Date.now()}.txt`);
-  await fs.writeFile(tmpFile, txt, 'utf-8');
+  appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length, isBatch });
 
-  appendDebugStep(record, 'tts_input_txt', { txtPreview: txt.slice(0, 1000), lineCount: txt.split('\n').length, tmpFile });
+  // 关闭批量处理模式（单条文本模式，避免文件上传问题）
+  appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: false }));
+  // 不导出SRT（单条模式不支持）
+  appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: false }));
 
-  // 启用批量处理 + 导出SRT
-  appendDebugStep(record, 'tts_lambda', await client.predict('/lambda', { value: true }));
-  appendDebugStep(record, 'tts_lambda_1', await client.predict('/lambda_1', { value: true }));
-
-  // 读取文件并创建File对象上传（确保文件名以.txt结尾）
-  const fileBuffer = await fs.readFile(tmpFile);
-  const fileObject = new File([fileBuffer], 'input.txt', { type: 'text/plain' });
-  appendDebugStep(record, 'tts_lambda_2', await client.predict('/lambda_2', { value: [fileObject] }));
+  // 直接传入文本
+  appendDebugStep(record, 'tts_lambda_3', await client.predict('/lambda_3', { value: txt }));
 
   // 其他参数设置
   appendDebugStep(record, 'tts_lambda_4', await client.predict('/lambda_4', { value: true }));
@@ -337,11 +328,11 @@ router.post('/translate-lines', authRequired, async (req: Request, res: Response
   }
 });
 
-// 新增：根据 translatedLines 直接生成语音（MP3+SRT）
+// 新增：根据 translatedLines 直接生成语音（支持逐条配音 + 合并配音）
 router.post('/tts-from-lines', authRequired, async (req: Request, res: Response) => {
-  const { lines } = req.body as { lines?: string[] };
+  const { lines, mode } = req.body as { lines?: string[]; mode?: 'individual' | 'merged' | 'both' };
 
-  const record = createDebugRecord({ lines });
+  const record = createDebugRecord({ lines, mode });
 
   try {
     const sourceLines = Array.isArray(lines)
@@ -361,14 +352,43 @@ router.post('/tts-from-lines', authRequired, async (req: Request, res: Response)
     }
 
     appendDebugStep(record, 'tts_source_lines', sourceLines);
-    const txt = buildTxtContent(sourceLines);
 
-    const ttsResult = await runTtsFromTxt(txt, record);
+    const results: { individual?: unknown[]; merged?: unknown } = {};
+
+    // 模式：逐条配音 或 两者都生成
+    if (mode === 'individual' || mode === 'both' || !mode) {
+      appendDebugStep(record, 'tts_mode', 'individual');
+      const individualResults = [];
+      for (let i = 0; i < sourceLines.length; i++) {
+        const line = sourceLines[i];
+        const lineRecord = createDebugRecord({ line, index: i });
+        try {
+          const ttsResult = await runTtsFromTxt(line, lineRecord, false);
+          individualResults.push({ line, index: i, tts: ttsResult });
+        } catch (err) {
+          individualResults.push({ line, index: i, error: String(err) });
+        }
+      }
+      results.individual = individualResults;
+    }
+
+    // 模式：合并配音 或 两者都生成
+    if (mode === 'merged' || mode === 'both') {
+      appendDebugStep(record, 'tts_mode', 'merged');
+      const mergedTxt = sourceLines.join(' '); // 用空格连接成一段
+      const mergedRecord = createDebugRecord({ mergedTxt });
+      try {
+        const ttsResult = await runTtsFromTxt(mergedTxt, mergedRecord, true);
+        results.merged = { txt: mergedTxt, tts: ttsResult };
+      } catch (err) {
+        results.merged = { txt: mergedTxt, error: String(err) };
+      }
+    }
 
     const result = {
       lines: sourceLines,
-      txt,
-      tts: ttsResult,
+      mode: mode || 'individual',
+      results,
     };
 
     record.result = result;

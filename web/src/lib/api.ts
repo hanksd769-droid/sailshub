@@ -142,19 +142,22 @@ export const translateLinesFromCopy = async (text: string) => {
   });
 };
 
-export const ttsFromLines = async (lines: string[]) => {
+export const ttsFromLines = async (lines: string[], mode: 'individual' | 'merged' | 'both' = 'both') => {
   return apiFetch<{
     success: boolean;
     data: {
       lines: string[];
-      txt: string;
-      tts: unknown;
+      mode: string;
+      results: {
+        individual?: Array<{ line: string; index: number; tts?: unknown; error?: string }>;
+        merged?: { txt: string; tts?: unknown; error?: string };
+      };
     };
     debugId?: string;
     debugUrl?: string;
     debugListUrl?: string;
   }>('/api/voice/tts-from-lines', {
     method: 'POST',
-    body: JSON.stringify({ lines }),
+    body: JSON.stringify({ lines, mode }),
   });
 };

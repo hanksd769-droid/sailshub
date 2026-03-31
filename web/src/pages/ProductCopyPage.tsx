@@ -128,17 +128,28 @@ const ProductCopyPage = () => {
     setTtsJson('');
 
     try {
-      const res = await ttsFromLines(translatedLines);
+      const res = await ttsFromLines(translatedLines, 'both');
 
-      setTtsText([
-        '语音任务已执行（批量 + 导出SRT）',
-        '',
-        '输入英文（每行一句）：',
-        ...(res.data.lines || []),
-      ].join('\n'));
+      const resultLines = ['语音生成完成（逐条 + 合并）', ''];
 
+      // 显示逐条配音结果
+      if (res.data.results?.individual) {
+        resultLines.push('【逐条配音】');
+        res.data.results.individual.forEach((item: { line: string; index: number }) => {
+          resultLines.push(`${item.index + 1}. ${item.line}`);
+        });
+        resultLines.push('');
+      }
+
+      // 显示合并配音结果
+      if (res.data.results?.merged) {
+        resultLines.push('【合并配音】');
+        resultLines.push(res.data.results.merged.txt || '');
+      }
+
+      setTtsText(resultLines.join('\n'));
       setTtsJson(JSON.stringify(res, null, 2));
-      message.success('语音生成请求完成（含SRT）');
+      message.success('语音生成完成（逐条+合并）');
     } catch (error) {
       const msg = error instanceof Error ? error.message : '语音生成失败';
       message.error(msg);
