@@ -59,15 +59,32 @@ const ResultPanel = ({
         padding: 16, 
         borderRadius: 8, 
         minHeight: 80,
-        maxHeight: 300,
+        maxHeight: 400,
         overflow: 'auto',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
         fontSize: 14,
-        lineHeight: 1.6,
+        lineHeight: 1.8,
         color: '#333'
       }}>
-        {streamText || <Typography.Text type="secondary">等待输出...</Typography.Text>}
+        {streamText ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {streamText.split(/[,，;；]/).map((line, index) => {
+              const trimmed = line.trim();
+              if (!trimmed) return null;
+              return (
+                <div key={index} style={{ 
+                  background: '#fff', 
+                  padding: '8px 12px', 
+                  borderRadius: 4,
+                  borderLeft: '3px solid #1890ff'
+                }}>
+                  {trimmed}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <Typography.Text type="secondary">等待输出...</Typography.Text>
+        )}
       </div>
     </Card>
   );
