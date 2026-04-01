@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Form, Input, Select, Space, Typography, message } from 'antd';
+import { Alert, Button, Card, Form, Input, Select, Space, Typography, message, Divider, List, Tag } from 'antd';
 import { useState } from 'react';
 import ResultPanel from '../components/ResultPanel';
 import { runWorkflowStream, translateLinesFromCopy, ttsFromLines } from '../lib/api';
@@ -25,6 +25,10 @@ const ProductCopyPage = () => {
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsText, setTtsText] = useState('');
   const [ttsJson, setTtsJson] = useState('');
+  const [ttsResults, setTtsResults] = useState<{
+    individual?: Array<{ line: string; index: number; tts?: unknown; error?: string }>;
+    merged?: { txt: string; tts?: unknown; error?: string };
+  } | null>(null);
 
   const [form] = Form.useForm();
 
@@ -129,14 +133,15 @@ const ProductCopyPage = () => {
 
     try {
       const res = await ttsFromLines(translatedLines, 'both');
+      setTtsResults(res.data.results);
 
       const resultLines = ['语音生成完成（逐条 + 合并）', ''];
 
       // 显示逐条配音结果
       if (res.data.results?.individual) {
-        resultLines.push('【逐条配音】');
+        resultLines.push(`【逐条配音】共 ${res.data.results.individual.length} 条`);
         res.data.results.individual.forEach((item: { line: string; index: number }) => {
-          resultLines.push(`${item.index + 1}. ${item.line}`);
+          resultLines.push(`${item.index + 1}. ${item.line.slice(0, 50)}${item.line.length > 50 ? '...' : ''}`);
         });
         resultLines.push('');
       }
@@ -144,7 +149,7 @@ const ProductCopyPage = () => {
       // 显示合并配音结果
       if (res.data.results?.merged) {
         resultLines.push('【合并配音】');
-        resultLines.push(res.data.results.merged.txt || '');
+        resultLines.push(res.data.results.merged.txt?.slice(0, 100) + '...' || '');
       }
 
       setTtsText(resultLines.join('\n'));
@@ -154,9 +159,20 @@ const ProductCopyPage = () => {
       const msg = error instanceof Error ? error.message : '语音生成失败';
       message.error(msg);
       setTtsText(`语音生成失败：${msg}`);
+      setTtsResults(null);
     } finally {
       setTtsLoading(false);
     }
+  };
+
+  // 提取音频URL
+  const getAudioUrl = (ttsData: unknown): string | null => {
+    if (!ttsData || typeof ttsData !== 'object') return null;
+    const data = ttsData as { data?: Array<{ url?: string }> };
+    if (data.data && data.data.length > 0 && data.data[0].url) {
+      return data.data[0].url;
+    }
+    return null;
   };
 
   return (
@@ -252,6 +268,68 @@ const ProductCopyPage = () => {
           onCopyText={() => navigator.clipboard.writeText(ttsText)}
           onCopyJson={() => navigator.clipboard.writeText(ttsJson)}
         />
+
+        {/* 音频播放区域 */}
+        {ttsResults && (
+          <Card title="🎵 生成的音频" className="form-section">
+            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+              {/* 逐条配音音频 */}
+              {ttsResults.individual && ttsResults.individual.length > 0 && (
+                <div>
+                  <Divider orientation="left">
+                    <Tag color="blue">逐条配音 ({ttsResults.individual.length}条)</Tag>
+                  </Divider>
+                  <List
+                    size="small"
+                    dataSource={ttsResults.individual}
+                    renderItem={(item, index) => {
+                      const audioUrl = getAudioUrl(item.tts);
+                      return (
+                        <List.Item>
+                          <Space direction="vertical" style={{ width: '100%' }}>
+                            <Typography.Text type="secondary">{index + 1}. {item.line.slice(0, 50)}{item.line.length > 50 ? '...' : ''}</Typography.Text>
+                            {audioUrl ? (
+                              <audio controls style={{ width: '100%' }}>
+                                <source src={audioUrl} type="audio/wav" />
+                                您的浏览器不支持音频播放
+                              </audio>
+                            ) : item.error ? (
+                              <Typography.Text type="danger">生成失败: {item.error}</Typography.Text>
+                            ) : (
+                              <Typography.Text type="warning">音频未生成</Typography.Text>
+                            )}
+                          </Space>
+                        </List.Item>
+                      );
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* 合并配音音频 */}
+              {ttsResults.merged && (
+                <div>
+                  <Divider orientation="left">
+                    <Tag color="green">合并配音</Tag>
+                  </Divider>
+                  {(() => {
+                    const audioUrl = getAudioUrl(ttsResults.merged?.tts);
+                    return audioUrl ? (
+                      <audio controls style={{ width: '100%' }}>
+                        <source src={audioUrl} type="audio/wav" />
+                        您的浏览器不支持音频播放
+                      </audio>
+                    ) : ttsResults.merged?.error ? (
+                      <Typography.Text type="danger">生成失败: {ttsResults.merged.error}</Typography.Text>
+                    ) : (
+                      <Typography.Text type="warning">音频未生成</Typography.Text>
+                    );
+                  })()}
+                </div>
+              )}
+            </Space>
+          </Card>
+        )}
       </Space>
     </div>
   );
