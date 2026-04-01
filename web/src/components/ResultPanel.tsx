@@ -67,20 +67,44 @@ const ResultPanel = ({
       }}>
         {streamText ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {streamText.split(/[,，;；]/).map((line, index) => {
-              const trimmed = line.trim();
-              if (!trimmed) return null;
-              return (
-                <div key={index} style={{ 
-                  background: '#fff', 
-                  padding: '8px 12px', 
-                  borderRadius: 4,
-                  borderLeft: '3px solid #1890ff'
-                }}>
-                  {trimmed}
-                </div>
-              );
-            })}
+            {(() => {
+              try {
+                // 尝试解析为 JSON
+                const jsonData = JSON.parse(streamText);
+                if (typeof jsonData === 'object' && jsonData !== null) {
+                  return Object.entries(jsonData).map(([key, value], index) => (
+                    <div key={index} style={{ 
+                      background: '#fff', 
+                      padding: '8px 12px', 
+                      borderRadius: 4,
+                      borderLeft: '3px solid #1890ff'
+                    }}>
+                      <Typography.Text strong style={{ color: '#1890ff' }}>{key}:</Typography.Text>
+                      <Typography.Text style={{ marginLeft: 8 }}>
+                        {typeof value === 'string' ? value : JSON.stringify(value)}
+                      </Typography.Text>
+                    </div>
+                  ));
+                }
+              } catch {
+                // 不是 JSON，按原样显示
+              }
+              // 非 JSON 文本，按行分割显示
+              return streamText.split('\n').map((line, index) => {
+                const trimmed = line.trim();
+                if (!trimmed) return null;
+                return (
+                  <div key={index} style={{ 
+                    background: '#fff', 
+                    padding: '8px 12px', 
+                    borderRadius: 4,
+                    borderLeft: '3px solid #1890ff'
+                  }}>
+                    {trimmed}
+                  </div>
+                );
+              });
+            })()}
           </div>
         ) : (
           <Typography.Text type="secondary">等待输出...</Typography.Text>
