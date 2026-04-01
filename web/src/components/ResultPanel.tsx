@@ -1,4 +1,5 @@
-import { Alert, Button, Progress, Space, Typography } from 'antd';
+import { Alert, Button, Card, Progress, Space, Typography, Tag } from 'antd';
+import { CopyOutlined } from '@ant-design/icons';
 
 interface ResultPanelProps {
   title: string;
@@ -9,6 +10,7 @@ interface ResultPanelProps {
   loading?: boolean;
   progress?: number;
   errorText?: string;
+  type?: 'primary' | 'success' | 'warning';
 }
 
 const ResultPanel = ({
@@ -20,25 +22,54 @@ const ResultPanel = ({
   loading,
   progress,
   errorText,
+  type = 'primary',
 }: ResultPanelProps) => {
+  const tagColors = {
+    primary: 'blue',
+    success: 'green',
+    warning: 'orange',
+  };
+
   return (
-    <div className="result-panel">
-      <div className="page-header" style={{ marginBottom: 16 }}>
-        <Typography.Title level={5} style={{ margin: 0 }}>
-          {title}
-        </Typography.Title>
-        <Space className="result-actions">
-          <Button onClick={onCopyText}>复制文本</Button>
-          <Button onClick={onCopyJson} disabled={!jsonText}>
-            复制 JSON
-          </Button>
+    <Card
+      className="result-panel"
+      title={
+        <Space>
+          <Tag color={tagColors[type]}>{title}</Tag>
         </Space>
-      </div>
+      }
+      extra={
+        <Space>
+          <Button size="small" icon={<CopyOutlined />} onClick={onCopyText}>
+            复制
+          </Button>
+          {jsonText && (
+            <Button size="small" icon={<CopyOutlined />} onClick={onCopyJson}>
+              JSON
+            </Button>
+          )}
+        </Space>
+      }
+    >
       {typeof progress === 'number' && <Progress percent={progress} size="small" />}
       {loading && <Typography.Text type="secondary">任务运行中...</Typography.Text>}
-      {errorText && <Alert type="error" message={errorText} showIcon />}
-      <div className="stream-box">{streamText || '等待输出...'}</div>
-    </div>
+      {errorText && <Alert type="error" message={errorText} showIcon style={{ marginBottom: 8 }} />}
+      <div style={{ 
+        background: '#f6f8fa', 
+        padding: 16, 
+        borderRadius: 8, 
+        minHeight: 80,
+        maxHeight: 300,
+        overflow: 'auto',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        fontSize: 14,
+        lineHeight: 1.6,
+        color: '#333'
+      }}>
+        {streamText || <Typography.Text type="secondary">等待输出...</Typography.Text>}
+      </div>
+    </Card>
   );
 };
 

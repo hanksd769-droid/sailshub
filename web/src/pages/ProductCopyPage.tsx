@@ -240,6 +240,7 @@ const ProductCopyPage = () => {
 
         <ResultPanel
           title="生成结果"
+          type="primary"
           streamText={streamText}
           jsonText={jsonText}
           loading={loading}
@@ -250,23 +251,14 @@ const ProductCopyPage = () => {
         />
 
         <ResultPanel
-          title="独立英译结果（每行一条）"
+          title="独立英译结果"
+          type="success"
           streamText={translatedText || '等待英译结果...'}
           jsonText={translatedJson}
           loading={translateLoading}
           progress={translateLoading ? 60 : 100}
           onCopyText={() => navigator.clipboard.writeText(translatedText)}
           onCopyJson={() => navigator.clipboard.writeText(translatedJson)}
-        />
-
-        <ResultPanel
-          title="语音任务结果（MP3+SRT）"
-          streamText={ttsText || '等待语音结果...'}
-          jsonText={ttsJson}
-          loading={ttsLoading}
-          progress={ttsLoading ? 60 : 100}
-          onCopyText={() => navigator.clipboard.writeText(ttsText)}
-          onCopyJson={() => navigator.clipboard.writeText(ttsJson)}
         />
 
         {/* 音频播放区域 */}
