@@ -17,6 +17,12 @@
 - [package.json](file://api/package.json)
 </cite>
 
+## 更新摘要
+**变更内容**
+- 更新了 ResultPanel 类型系统的使用说明，区分生成结果（primary）和独立英译结果（success）
+- 移除了语音任务结果面板的相关描述，改为音频播放区域展示
+- 更新了组件使用示例和类型参数说明
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -109,10 +115,10 @@ stateDiagram-v2
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:13-338](file://web/src/pages/ProductCopyPage.tsx#L13-L338)
+- [ProductCopyPage.tsx:13-330](file://web/src/pages/ProductCopyPage.tsx#L13-L330)
 
 **章节来源**
-- [ProductCopyPage.tsx:13-338](file://web/src/pages/ProductCopyPage.tsx#L13-L338)
+- [ProductCopyPage.tsx:13-330](file://web/src/pages/ProductCopyPage.tsx#L13-L330)
 
 ## 架构概览
 
@@ -220,14 +226,15 @@ class ResultPanel {
 +boolean loading
 +number progress
 +string errorText
++string type
 }
 ProductCopyPage --> ResultPanel : 组合
 ProductCopyPage --> ApiClient : 使用
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:13-338](file://web/src/pages/ProductCopyPage.tsx#L13-L338)
-- [ResultPanel.tsx:3-46](file://web/src/components/ResultPanel.tsx#L3-L46)
+- [ProductCopyPage.tsx:13-330](file://web/src/pages/ProductCopyPage.tsx#L13-L330)
+- [ResultPanel.tsx:3-77](file://web/src/components/ResultPanel.tsx#L3-L77)
 
 #### 表单配置
 
@@ -240,9 +247,20 @@ ProductCopyPage --> ApiClient : 使用
 | 直播带货 | 短促有力，促销导向 | 直播电商、限时促销 |
 | 强对比 | 对比强烈，突出差异 | 性价比产品、竞品对比 |
 
+#### ResultPanel 类型系统
+
+**更新** 新增了基于 ResultPanel 类型系统的分类机制：
+
+| 类型 | 颜色 | 用途 | 示例 |
+|------|------|------|------|
+| primary | 蓝色 | 生成结果 | 文案生成结果 |
+| success | 绿色 | 独立英译结果 | 英文翻译结果 |
+| warning | 橙色 | 警告信息 | 错误状态显示 |
+
 **章节来源**
 - [ProductCopyPage.tsx:6-11](file://web/src/pages/ProductCopyPage.tsx#L6-L11)
 - [ProductCopyPage.tsx:193-216](file://web/src/pages/ProductCopyPage.tsx#L193-L216)
+- [ResultPanel.tsx:13](file://web/src/components/ResultPanel.tsx#L13)
 
 ### API 客户端集成
 
@@ -291,7 +309,9 @@ O --> P
 
 ### 结果面板组件
 
-ResultPanel 提供了统一的结果展示界面：
+**更新** ResultPanel 现在支持类型系统来区分不同结果类别：
+
+ResultPanel 提供了统一的结果展示界面，并通过类型参数区分不同结果类别：
 
 #### 组件特性
 
@@ -301,9 +321,45 @@ ResultPanel 提供了统一的结果展示界面：
 | 复制功能 | Clipboard API | 快速复制结果 |
 | 加载状态 | Loading 状态 | 明确操作状态 |
 | 错误提示 | Alert 组件 | 清晰错误信息 |
+| 类型区分 | Tag 颜色系统 | 区分不同结果类别 |
+
+#### 类型系统实现
+
+ResultPanel 现在支持三种类型：
+- **primary**：蓝色标签，用于主要的生成结果
+- **success**：绿色标签，用于独立的翻译结果  
+- **warning**：橙色标签，用于警告信息
 
 **章节来源**
-- [ResultPanel.tsx:14-46](file://web/src/components/ResultPanel.tsx#L14-L46)
+- [ResultPanel.tsx:14-77](file://web/src/components/ResultPanel.tsx#L14-L77)
+
+### 语音合成区域
+
+**更新** 移除了独立的语音任务结果面板，改为音频播放区域：
+
+语音合成完成后，系统通过专门的音频播放区域展示结果：
+
+#### 音频播放区域结构
+
+```mermaid
+graph TB
+A[语音合成结果] --> B[逐条配音区域]
+A --> C[合并配音区域]
+B --> D[逐条音频列表]
+C --> E[合并音频播放器]
+D --> F[每条音频的播放控件]
+E --> G[整体音频播放控件]
+```
+
+**图表来源**
+- [ProductCopyPage.tsx:264-324](file://web/src/pages/ProductCopyPage.tsx#L264-L324)
+
+音频播放区域包含两个部分：
+1. **逐条配音**：显示每条翻译文本对应的音频
+2. **合并配音**：显示所有文本合并后的音频
+
+**章节来源**
+- [ProductCopyPage.tsx:264-324](file://web/src/pages/ProductCopyPage.tsx#L264-L324)
 
 ## 依赖关系分析
 
@@ -430,5 +486,6 @@ I --> G
 - **多语言支持**：完整的国际化和本地化支持
 - **安全可靠**：完善的认证授权和错误处理机制
 - **性能优化**：合理的资源管理和性能优化策略
+- **类型化结果展示**：通过 ResultPanel 类型系统清晰区分不同结果类别
 
 该系统为类似的内容创作工具提供了优秀的参考范例，其设计理念和技术实现都值得深入学习和借鉴。
