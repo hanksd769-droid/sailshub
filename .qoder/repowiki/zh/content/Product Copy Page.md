@@ -12,8 +12,6 @@
 - [index.html](file://web/index.html)
 - [index.ts](file://api/src/index.ts)
 - [config.ts](file://api/src/config.ts)
-- [modules.ts](file://api/src/modules.ts)
-- [db.ts](file://api/src/db.ts)
 - [runs.ts](file://api/src/routes/runs.ts)
 - [package.json](file://web/package.json)
 - [package.json](file://api/package.json)
@@ -21,10 +19,12 @@
 
 ## 更新摘要
 **变更内容**
-- 修复了中文模板选项显示问题（强对比），解决了字符编码导致的中文乱码问题
-- 增强了UI文本的正确渲染，确保中文界面元素正常显示
-- 更新了V2功能的中文支持，完善了中文界面的本地化显示
-- 优化了HTML文档的字符编码设置，确保整个应用的字符集一致性
+- ProductCopyPage 组件经历了完全重写，从原有的复杂架构简化为更清晰的三阶段工作流
+- 移除了 V2 音频生成功能，专注于传统的文案生成、翻译和语音合成流程
+- 修复了中文模板选项显示问题，解决了字符编码导致的中文乱码问题
+- 增强了 UI 文本的正确渲染，确保中文界面元素正常显示
+- 更新了 V2 功能的中文支持，完善了中文界面的本地化显示
+- 优化了 HTML 文档的字符编码设置，确保整个应用的字符集一致性
 
 ## 目录
 1. [简介](#简介)
@@ -41,15 +41,14 @@
 
 产品复制页面是基于 Coze 工作流平台构建的一个综合性内容创作工具，专门用于生成高质量的产品营销文案。该页面集成了完整的文案生成、翻译和语音合成工作流程，为用户提供从创意到成品的一站式解决方案。
 
-**更新** 新增了产品文案生成V2（带音频）功能，允许用户直接从上一步生成的文案数据中调用带音频的工作流，实现一键生成带音频的完整结果。本次更新特别关注了字符编码改进，修复了中文模板选项显示问题，增强了UI文本的正确渲染，并完善了V2功能的中文支持。
+**更新** ProductCopyPage 组件经过完全重写，移除了复杂的 V2 音频生成功能，回归到简洁明了的三阶段工作流：文案生成 → 独立翻译 → 语音合成。本次更新特别关注了字符编码改进，修复了中文模板选项显示问题，增强了 UI 文本的正确渲染，并完善了中文界面的本地化显示。
 
 该系统采用前后端分离架构，前端使用 React + Ant Design 构建用户界面，后端基于 Express.js 提供 RESTful API 服务。核心功能包括：
 
 - **智能文案生成**：基于预设模板和产品信息生成专业营销文案
 - **多语言翻译**：支持独立的英文翻译功能
-- **语音合成**：将文本转换为高质量的语音文件（MP3+SRT）
+- **语音合成**：将文本转换为高质量的语音文件（MP3+WAV）
 - **实时流式处理**：提供渐进式的用户体验反馈
-- **V2音频生成**：一键生成带音频的完整文案结果
 - **中文字符编码支持**：确保中文界面元素的正确显示
 
 ## 项目结构
@@ -70,7 +69,6 @@ G[index.ts] --> H[config.ts]
 G --> I[routes/]
 I --> J[modules.ts]
 I --> K[runs.ts]
-G --> L[db.ts]
 end
 subgraph "外部服务"
 M[Coze Workflow]
@@ -85,12 +83,12 @@ G --> O
 
 **图表来源**
 - [main.tsx:1-17](file://web/src/main.tsx#L1-L17)
-- [App.tsx:1-70](file://web/src/App.tsx#L1-L70)
+- [App.tsx:1-72](file://web/src/App.tsx#L1-L72)
 - [index.ts:1-29](file://api/src/index.ts#L1-L29)
 
 **章节来源**
 - [main.tsx:1-17](file://web/src/main.tsx#L1-L17)
-- [App.tsx:1-70](file://web/src/App.tsx#L1-L70)
+- [App.tsx:1-72](file://web/src/App.tsx#L1-L72)
 - [package.json:1-26](file://web/package.json#L1-26)
 - [package.json:1-37](file://api/package.json#L1-37)
 
@@ -98,12 +96,11 @@ G --> O
 
 ### 主要功能模块
 
-产品复制页面包含四个核心功能模块，每个模块都有独立的状态管理和数据处理逻辑：
+产品复制页面包含三个核心功能模块，每个模块都有独立的状态管理和数据处理逻辑：
 
-1. **传统文案生成模块**：负责调用 Coze 工作流生成产品文案
+1. **文案生成模块**：负责调用 Coze 工作流生成产品文案
 2. **翻译模块**：提供独立的英文翻译功能
 3. **语音合成模块**：将文本转换为语音文件
-4. **V2音频生成模块**：一键生成带音频的完整文案结果
 
 ### 状态管理架构
 
@@ -114,21 +111,18 @@ stateDiagram-v2
 文案生成中 --> 翻译中 : 独立英译
 翻译中 --> 语音生成中 : 生成语音
 语音生成中 --> 完成 : 成功
-语音生成中 --> V2音频生成中 : V2音频生成
-V2音频生成中 --> 完成 : 成功
 文案生成中 --> 错误 : 失败
 翻译中 --> 错误 : 失败
 语音生成中 --> 错误 : 失败
-V2音频生成中 --> 错误 : 失败
 错误 --> 空闲状态 : 重试
 完成 --> 空闲状态 : 重置
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:13-490](file://web/src/pages/ProductCopyPage.tsx#L13-L490)
+- [ProductCopyPage.tsx:13-292](file://web/src/pages/ProductCopyPage.tsx#L13-L292)
 
 **章节来源**
-- [ProductCopyPage.tsx:13-490](file://web/src/pages/ProductCopyPage.tsx#L13-L490)
+- [ProductCopyPage.tsx:13-292](file://web/src/pages/ProductCopyPage.tsx#L13-L292)
 
 ## 架构概览
 
@@ -163,7 +157,7 @@ G --> K
 **图表来源**
 - [index.ts:1-29](file://api/src/index.ts#L1-L29)
 - [config.ts:13-19](file://api/src/config.ts#L13-L19)
-- [db.ts:6-8](file://api/src/db.ts#L6-L8)
+- [runs.ts:6-8](file://api/src/routes/runs.ts#L6-L8)
 
 ### 数据流架构
 
@@ -191,17 +185,10 @@ S->>V : 调用语音合成
 V-->>S : 返回音频文件
 S-->>A : 返回语音结果
 A-->>P : 显示音频播放器
-P->>A : V2功能 - 导入数据
-P->>A : V2功能 - 生成音频
-A->>S : POST /api/runs/product-copy-v2/run
-S->>W : 触发V2工作流执行
-W-->>S : 流式返回音频URL
-S-->>A : SSE 数据流
-A-->>P : 更新V2进度和音频结果
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:35-166](file://web/src/pages/ProductCopyPage.tsx#L35-L166)
+- [ProductCopyPage.tsx:33-136](file://web/src/pages/ProductCopyPage.tsx#L33-L136)
 - [api.ts:58-163](file://web/src/lib/api.ts#L58-L163)
 
 ## 详细组件分析
@@ -225,18 +212,11 @@ class ProductCopyPage {
 +string translatedJson
 +string[] translatedLines
 +boolean ttsLoading
-+string ttsText
-+string ttsJson
 +Object ttsResults
-+boolean v2Loading
-+number v2Progress
-+Object v2Result
 +Form form
 +handleSubmit() Promise
-+handleTranslateOnly() Promise
++handleTranslate() Promise
 +handleTtsFromTranslatedLines() Promise
-+handleImportData() void
-+handleGenerateV2() Promise
 +getAudioUrl(ttsData) string|null
 }
 class ResultPanel {
@@ -255,7 +235,7 @@ ProductCopyPage --> ApiClient : 使用
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:13-490](file://web/src/pages/ProductCopyPage.tsx#L13-L490)
+- [ProductCopyPage.tsx:13-292](file://web/src/pages/ProductCopyPage.tsx#L13-L292)
 - [ResultPanel.tsx:3-118](file://web/src/components/ResultPanel.tsx#L3-L118)
 
 #### 表单配置
@@ -271,107 +251,11 @@ ProductCopyPage --> ApiClient : 使用
 
 **更新** 中文模板选项现已正确显示，解决了之前显示为"强对?"的问题。
 
-#### V2功能模块
+#### V2 功能模块
 
-**新增** V2功能模块提供了更高效的音频生成流程：
+**已移除** V2 功能模块已被完全移除，不再支持一键生成带音频的完整文案结果。
 
-```mermaid
-flowchart TD
-A[导入上一步数据] --> B[验证数据完整性]
-B --> C{数据有效?}
-C --> |是| D[调用V2工作流]
-C --> |否| E[显示错误信息]
-D --> F[流式接收音频URL]
-F --> G[更新进度条]
-G --> H[显示音频播放器]
-H --> I[完成生成]
-E --> J[等待用户修正]
-J --> A
-```
-
-**图表来源**
-- [ProductCopyPage.tsx:189-255](file://web/src/pages/ProductCopyPage.tsx#L189-L255)
-
-**章节来源**
-- [ProductCopyPage.tsx:6-11](file://web/src/pages/ProductCopyPage.tsx#L6-L11)
-- [ProductCopyPage.tsx:193-216](file://web/src/pages/ProductCopyPage.tsx#L193-L216)
-- [ResultPanel.tsx:13](file://web/src/components/ResultPanel.tsx#L13)
-
-### API 客户端集成
-
-#### 流式数据处理
-
-API 客户端实现了完整的 Server-Sent Events (SSE) 支持：
-
-```mermaid
-flowchart TD
-A[发起请求] --> B[建立 SSE 连接]
-B --> C[接收数据块]
-C --> D[缓冲区解析]
-D --> E{数据完整性?}
-E --> |否| C
-E --> |是| F[事件类型判断]
-F --> G{Message 事件?}
-G --> |是| H[JSON 解析]
-G --> |否| I{Error 事件?}
-I --> |是| J[错误处理]
-I --> |否| K{Done 事件?}
-K --> |是| L[完成回调]
-K --> |否| C
-H --> M[更新 UI 状态]
-J --> N[显示错误信息]
-L --> O[显示成功信息]
-M --> C
-N --> P[停止加载]
-O --> P
-```
-
-**图表来源**
-- [api.ts:85-115](file://web/src/lib/api.ts#L85-L115)
-
-#### 错误处理机制
-
-系统实现了多层次的错误处理策略：
-
-1. **网络层错误**：捕获 HTTP 响应状态码
-2. **认证错误**：自动清除令牌并重定向到登录页
-3. **业务逻辑错误**：显示具体的错误信息
-4. **UI 层错误**：提供用户友好的错误提示
-
-**章节来源**
-- [api.ts:13-36](file://web/src/lib/api.ts#L13-L36)
-- [App.tsx:26-39](file://web/src/App.tsx#L26-L39)
-
-### 结果面板组件
-
-**更新** ResultPanel 现在支持类型系统来区分不同结果类别：
-
-ResultPanel 提供了统一的结果展示界面，并通过类型参数区分不同结果类别：
-
-#### 组件特性
-
-| 功能特性 | 实现方式 | 用户价值 |
-|----------|----------|----------|
-| 实时进度条 | Progress 组件 | 可视化任务进度 |
-| 复制功能 | Clipboard API | 快速复制结果 |
-| 加载状态 | Loading 状态 | 明确操作状态 |
-| 错误提示 | Alert 组件 | 清晰错误信息 |
-| 类型区分 | Tag 颜色系统 | 区分不同结果类别 |
-| 中文支持 | 字符编码优化 | 正确显示中文内容 |
-
-#### 类型系统实现
-
-ResultPanel 现在支持三种类型：
-- **primary**：蓝色标签，用于主要的生成结果
-- **success**：绿色标签，用于独立的翻译结果  
-- **warning**：橙色标签，用于警告信息
-
-**章节来源**
-- [ResultPanel.tsx:14-118](file://web/src/components/ResultPanel.tsx#L14-L118)
-
-### 语音合成区域
-
-**更新** 移除了独立的语音任务结果面板，改为音频播放区域：
+#### 语音合成区域
 
 语音合成完成后，系统通过专门的音频播放区域展示结果：
 
@@ -388,43 +272,14 @@ E --> G[整体音频播放控件]
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:344-403](file://web/src/pages/ProductCopyPage.tsx#L344-L403)
+- [ProductCopyPage.tsx:230-285](file://web/src/pages/ProductCopyPage.tsx#L230-L285)
 
 音频播放区域包含两个部分：
 1. **逐条配音**：显示每条翻译文本对应的音频
 2. **合并配音**：显示所有文本合并后的音频
 
 **章节来源**
-- [ProductCopyPage.tsx:344-403](file://web/src/pages/ProductCopyPage.tsx#L344-L403)
-
-### V2音频生成模块
-
-**新增** V2音频生成模块提供了完整的音频生成解决方案：
-
-#### V2功能特性
-
-| 功能特性 | 实现方式 | 用户价值 |
-|----------|----------|----------|
-| 数据导入 | 自动解析上一步结果 | 无需手动输入 |
-| 流式进度 | Progress 组件 | 实时进度反馈 |
-| 音频播放 | HTML5 Audio | 即时试听效果 |
-| 错误处理 | 详细错误信息 | 快速定位问题 |
-| 中文支持 | 本地化优化 | 完整的中文界面 |
-
-#### V2数据结构
-
-V2功能使用以下数据结构：
-
-| 字段名 | 类型 | 描述 | 示例值 |
-|--------|------|------|--------|
-| buwei | string[] | 产品部位 | ['面部','颈部'] |
-| changping | string | 产品名称 | '377美白双管身体乳' |
-| donzuojiexi | string[] | 动作解析 | ['涂抹','按摩','吸收'] |
-| koubo_mp3_Array | string[] | 逐条音频URL | ['http://.../1.mp3','http://.../2.mp3'] |
-| koubo_mp3_hebin | string | 合并音频URL | 'http://.../merged.mp3'
-
-**章节来源**
-- [ProductCopyPage.tsx:405-484](file://web/src/pages/ProductCopyPage.tsx#L405-L484)
+- [ProductCopyPage.tsx:230-285](file://web/src/pages/ProductCopyPage.tsx#L230-L285)
 
 ## 依赖关系分析
 
@@ -529,7 +384,6 @@ I --> G
 | 文案生成失败 | 工作流配置错误 | 检查工作流 ID 和参数 |
 | 翻译结果异常 | 翻译服务不可用 | 验证翻译服务配置 |
 | 语音合成失败 | 语音服务异常 | 检查语音服务 URL 配置 |
-| V2音频生成失败 | V2工作流配置错误 | 检查 product-copy-v2 工作流配置 |
 | 中文显示乱码 | 字符编码问题 | 检查 HTML 字符集设置 |
 
 **章节来源**
@@ -553,9 +407,9 @@ I --> G
 
 产品复制页面是一个功能完整、架构清晰的现代化 Web 应用。它成功地将复杂的工作流处理过程封装为简单易用的用户界面，为内容创作者提供了强大的技术支持。
 
-**更新** 新增的V2功能模块进一步提升了用户体验，实现了从文案生成到音频合成的一站式解决方案。通过数据导入和流式音频生成，用户可以快速获得带音频的完整产品文案结果。
+**更新** 经过完全重写后，ProductCopyPage 组件更加简洁高效，专注于核心的文案生成、翻译和语音合成功能。移除的 V2 音频生成功能被简化的工作流程所替代，用户可以通过标准的三阶段流程获得高质量的文案和语音结果。
 
-本次更新重点关注了字符编码改进，修复了中文模板选项显示问题，增强了UI文本的正确渲染，并完善了V2功能的中文支持。这些改进确保了应用在中文环境下的稳定运行和良好的用户体验。
+本次更新重点关注了字符编码改进，修复了中文模板选项显示问题，增强了 UI 文本的正确渲染，并完善了中文界面的本地化显示。这些改进确保了应用在中文环境下的稳定运行和良好的用户体验。
 
 ### 主要优势
 
@@ -563,8 +417,8 @@ I --> G
 2. **功能完整**：覆盖从文案生成到语音合成的完整工作流程
 3. **技术架构先进**：采用现代前端技术和响应式设计
 4. **可扩展性强**：模块化的架构便于功能扩展和维护
-5. **效率显著提升**：V2功能实现一键音频生成，大幅提升工作效率
-6. **中文支持完善**：解决了字符编码问题，确保中文界面元素正确显示
+5. **中文支持完善**：解决了字符编码问题，确保中文界面元素正确显示
+6. **代码结构清晰**：移除了复杂的 V2 功能，使代码更加简洁易维护
 
 ### 技术亮点
 
@@ -573,7 +427,6 @@ I --> G
 - **安全可靠**：完善的认证授权和错误处理机制
 - **性能优化**：合理的资源管理和性能优化策略
 - **类型化结果展示**：通过 ResultPanel 类型系统清晰区分不同结果类别
-- **V2音频生成**：集成数据导入和流式音频生成的完整解决方案
 - **字符编码修复**：解决了中文显示乱码问题，确保界面元素正确渲染
 
-该系统为类似的内容创作工具提供了优秀的参考范例，其设计理念和技术实现都值得深入学习和借鉴。特别是字符编码改进方面的实践，为中文Web应用开发提供了宝贵的经验。
+该系统为类似的内容创作工具提供了优秀的参考范例，其设计理念和技术实现都值得深入学习和借鉴。特别是字符编码改进方面的实践，为中文 Web 应用开发提供了宝贵的经验。
