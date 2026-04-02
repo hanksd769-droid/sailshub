@@ -24,6 +24,11 @@ export const modules = {
     name: '翻译功能',
     workflowId: '7555334081739948071',
   },
+  'product-copy-v2': {
+    key: 'product-copy-v2',
+    name: '产品文案生成V2（带音频）',
+    workflowId: '7543514436666867753',
+  },
 } as const;
 
 export type ModuleKey = keyof typeof modules;

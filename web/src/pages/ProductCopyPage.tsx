@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Form, Input, Select, Space, Typography, message, Divider, List, Tag } from 'antd';
+import { Alert, Button, Card, Form, Input, Select, Space, Typography, message, Divider, List, Tag, Progress } from 'antd';
 import { useState } from 'react';
 import ResultPanel from '../components/ResultPanel';
 import { runWorkflowStream, translateLinesFromCopy, ttsFromLines } from '../lib/api';
@@ -28,6 +28,17 @@ const ProductCopyPage = () => {
   const [ttsResults, setTtsResults] = useState<{
     individual?: Array<{ line: string; index: number; tts?: unknown; error?: string }>;
     merged?: { txt: string; tts?: unknown; error?: string };
+  } | null>(null);
+
+  // V2 功能状态
+  const [v2Loading, setV2Loading] = useState(false);
+  const [v2Progress, setV2Progress] = useState(0);
+  const [v2Result, setV2Result] = useState<{
+    buwei?: string[];
+    changping?: string;
+    donzuojiexi?: string[];
+    koubo_mp3_Array?: string[];
+    koubo_mp3_hebin?: string;
   } | null>(null);
 
   const [form] = Form.useForm();
@@ -173,6 +184,74 @@ const ProductCopyPage = () => {
       return data.data[0].url;
     }
     return null;
+  };
+
+  // V2 功能：导入上一步数据
+  const handleImportData = () => {
+    try {
+      const lastResult = streamText;
+      if (!lastResult) {
+        message.warning('请先生成文案');
+        return;
+      }
+      const parsed = JSON.parse(lastResult);
+      setV2Result({
+        buwei: parsed.buwei || [],
+        changping: parsed.changping || '',
+        donzuojiexi: parsed.donzuojiexi || [],
+      });
+      message.success('数据导入成功');
+    } catch {
+      message.error('导入失败，请确保已生成有效文案');
+    }
+  };
+
+  // V2 功能：开始生成（调用带音频的工作流）
+  const handleGenerateV2 = async () => {
+    if (!v2Result || !v2Result.buwei || !v2Result.changping) {
+      message.warning('请先导入数据');
+      return;
+    }
+
+    setV2Loading(true);
+    setV2Progress(5);
+
+    try {
+      await runWorkflowStream(
+        'product-copy-v2',
+        {
+          buwei: v2Result.buwei,
+          changping: v2Result.changping,
+          donzuojiexi: v2Result.donzuojiexi,
+        },
+        (data) => {
+          setV2Progress((prev) => Math.min(prev + 10, 95));
+          // 解析返回的音频URL
+          if (typeof data === 'object' && data !== null) {
+            const d = data as { koubo_mp3_Array?: string[]; koubo_mp3_hebin?: string };
+            if (d.koubo_mp3_Array || d.koubo_mp3_hebin) {
+              setV2Result((prev) => ({
+                ...prev,
+                koubo_mp3_Array: d.koubo_mp3_Array,
+                koubo_mp3_hebin: d.koubo_mp3_hebin,
+              }));
+            }
+          }
+        },
+        () => {
+          setV2Progress(100);
+          setV2Loading(false);
+          message.success('音频生成完成');
+        },
+        (errMsg: string) => {
+          setV2Loading(false);
+          message.error(errMsg || '生成失败');
+        }
+      );
+    } catch (error) {
+      setV2Loading(false);
+      message.error('生成失败');
+    }
   };
 
   return (
@@ -322,6 +401,87 @@ const ProductCopyPage = () => {
             </Space>
           </Card>
         )}
+
+        {/* V2 功能：一键导入 + 生成音频 */}
+        <Card title="🎬 产品文案生成V2（带音频）" className="form-section">
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Typography.Text type="secondary">
+              导入上一步生成的文案数据，调用 Coze 工作流生成带音频的完整结果
+            </Typography.Text>
+            
+            <Space>
+              <Button type="default" onClick={handleImportData} disabled={!streamText}>
+                导入数据
+              </Button>
+              <Button 
+                type="primary" 
+                loading={v2Loading} 
+                onClick={handleGenerateV2}
+                disabled={!v2Result?.buwei}
+              >
+                开始生成
+              </Button>
+            </Space>
+
+            {v2Progress > 0 && v2Progress < 100 && (
+              <Progress percent={v2Progress} size="small" />
+            )}
+
+            {/* 显示导入的数据 */}
+            {v2Result && (
+              <div style={{ background: '#f6f8fa', padding: 16, borderRadius: 8 }}>
+                <Typography.Text strong>已导入数据：</Typography.Text>
+                <div style={{ marginTop: 8 }}>
+                  {v2Result.buwei && (
+                    <Tag color="blue">部位: {v2Result.buwei.join(', ')}</Tag>
+                  )}
+                  {v2Result.changping && (
+                    <Tag color="green">产品: {v2Result.changping}</Tag>
+                  )}
+                  {v2Result.donzuojiexi && (
+                    <Tag color="orange">动作解析: {v2Result.donzuojiexi.length} 项</Tag>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 显示生成的音频 */}
+            {v2Result?.koubo_mp3_Array && v2Result.koubo_mp3_Array.length > 0 && (
+              <div>
+                <Divider orientation="left">
+                  <Tag color="blue">逐条音频 ({v2Result.koubo_mp3_Array.length}条)</Tag>
+                </Divider>
+                <List
+                  size="small"
+                  dataSource={v2Result.koubo_mp3_Array}
+                  renderItem={(url, index) => (
+                    <List.Item>
+                      <Space direction="vertical" style={{ width: '100%' }}>
+                        <Typography.Text type="secondary">音频 {index + 1}</Typography.Text>
+                        <audio controls style={{ width: '100%' }}>
+                          <source src={url} type="audio/wav" />
+                          您的浏览器不支持音频播放
+                        </audio>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )}
+
+            {v2Result?.koubo_mp3_hebin && (
+              <div>
+                <Divider orientation="left">
+                  <Tag color="green">合并音频</Tag>
+                </Divider>
+                <audio controls style={{ width: '100%' }}>
+                  <source src={v2Result.koubo_mp3_hebin} type="audio/wav" />
+                  您的浏览器不支持音频播放
+                </audio>
+              </div>
+            )}
+          </Space>
+        </Card>
       </Space>
     </div>
   );
