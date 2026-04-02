@@ -1,12 +1,12 @@
 export const modules = {
   'detail-image-with-ref': {
     key: 'detail-image-with-ref',
-    name: '详情图生成（有参考图）',
+    name: '详情图生成（有参考图�?,
     workflowId: '7616669788698361897',
   },
   'detail-image-no-ref': {
     key: 'detail-image-no-ref',
-    name: '详情图生成（无参考图）',
+    name: '详情图生成（无参考图�?,
     workflowId: '7615500483961585691',
   },
   'video-copy': {
@@ -26,7 +26,7 @@ export const modules = {
   },
   'product-copy-v2': {
     key: 'product-copy-v2',
-    name: '产品文案生成V2（带音频）',
+    name: '产品文案生成V2（带音频�?,
     workflowId: '7543514436666867753',
   },
 } as const;

@@ -7,7 +7,7 @@ const templateOptions = [
   { label: '知识科普', value: '知识科普' },
   { label: '种草推荐', value: '种草推荐' },
   { label: '直播带货', value: '直播带货' },
-  { label: '强对比', value: '强对比' },
+  { label: '强对�?, value: '强对�? },
 ];
 
 const ProductCopyPage = () => {
@@ -30,8 +30,7 @@ const ProductCopyPage = () => {
     merged?: { txt: string; tts?: unknown; error?: string };
   } | null>(null);
 
-  // V2 功能状态
-  const [v2Loading, setV2Loading] = useState(false);
+  // V2 功能状�?  const [v2Loading, setV2Loading] = useState(false);
   const [v2Progress, setV2Progress] = useState(0);
   const [v2Result, setV2Result] = useState<{
     buwei?: string[];
@@ -105,7 +104,7 @@ const ProductCopyPage = () => {
 
   const handleTranslateOnly = async () => {
     if (!streamText.trim()) {
-      message.warning('请先点击“开始生成”得到文案结果');
+      message.warning('请先点击“开始生成”得到文案结�?);
       return;
     }
 
@@ -126,7 +125,7 @@ const ProductCopyPage = () => {
     } catch (error) {
       const msg = error instanceof Error ? error.message : '英译失败';
       message.error(msg);
-      setTranslatedText(`英译失败：${msg}`);
+      setTranslatedText(`英译失败�?{msg}`);
     } finally {
       setTranslateLoading(false);
     }
@@ -134,7 +133,7 @@ const ProductCopyPage = () => {
 
   const handleTtsFromTranslatedLines = async () => {
     if (!translatedLines.length) {
-      message.warning('请先执行独立英译，得到英文数组后再生成语音');
+      message.warning('请先执行独立英译，得到英文数组后再生成语�?);
       return;
     }
 
@@ -146,7 +145,7 @@ const ProductCopyPage = () => {
       const res = await ttsFromLines(translatedLines, 'both');
       setTtsResults(res.data.results);
 
-      const resultLines = ['语音生成完成（逐条 + 合并）', ''];
+      const resultLines = ['语音生成完成（逐条 + 合并�?, ''];
 
       // 显示逐条配音结果
       if (res.data.results?.individual) {
@@ -159,17 +158,17 @@ const ProductCopyPage = () => {
 
       // 显示合并配音结果
       if (res.data.results?.merged) {
-        resultLines.push('【合并配音】');
+        resultLines.push('【合并配音�?);
         resultLines.push(res.data.results.merged.txt?.slice(0, 100) + '...' || '');
       }
 
       setTtsText(resultLines.join('\n'));
       setTtsJson(JSON.stringify(res, null, 2));
-      message.success('语音生成完成（逐条+合并）');
+      message.success('语音生成完成（逐条+合并�?);
     } catch (error) {
       const msg = error instanceof Error ? error.message : '语音生成失败';
       message.error(msg);
-      setTtsText(`语音生成失败：${msg}`);
+      setTtsText(`语音生成失败�?{msg}`);
       setTtsResults(null);
     } finally {
       setTtsLoading(false);
@@ -186,8 +185,7 @@ const ProductCopyPage = () => {
     return null;
   };
 
-  // V2 功能：导入上一步数据
-  const handleImportData = () => {
+  // V2 功能：导入上一步数�?  const handleImportData = () => {
     try {
       const lastResult = streamText;
       if (!lastResult) {
@@ -202,7 +200,7 @@ const ProductCopyPage = () => {
       });
       message.success('数据导入成功');
     } catch {
-      message.error('导入失败，请确保已生成有效文案');
+      message.error('导入失败，请确保已生成有效文�?);
     }
   };
 
@@ -273,15 +271,15 @@ const ProductCopyPage = () => {
             <Form.Item
               label="产品名称"
               name="Product_Name"
-              rules={[{ required: true, message: '请输入产品名称' }]}
+              rules={[{ required: true, message: '请输入产品名�? }]}
             >
-              <Input placeholder="例如：377美白双管身体乳" />
+              <Input placeholder="例如�?77美白双管身体�? />
             </Form.Item>
 
             <Form.Item
               label="卖点文案"
               name="maidian"
-              rules={[{ required: true, message: '请输入卖点文案' }]}
+              rules={[{ required: true, message: '请输入卖点文�? }]}
             >
               <Input.TextArea rows={8} placeholder="请输入产品卖点、功能、成分等信息" />
             </Form.Item>
@@ -296,16 +294,13 @@ const ProductCopyPage = () => {
 
             <Space>
               <Button type="primary" loading={loading} onClick={handleSubmit}>
-                开始生成
-              </Button>
+                开始生�?              </Button>
 
               <Button loading={translateLoading} onClick={handleTranslateOnly}>
-                独立英译（仅翻译）
-              </Button>
+                独立英译（仅翻译�?              </Button>
 
               <Button loading={ttsLoading} onClick={handleTtsFromTranslatedLines}>
-                生成语音（MP3+SRT）
-              </Button>
+                生成语音（MP3+SRT�?              </Button>
             </Space>
           </Form>
         </Card>
@@ -314,7 +309,7 @@ const ProductCopyPage = () => {
           type="info"
           showIcon
           message="流程说明"
-          description="1) 开始生成 -> 2) 独立英译（得到 translatedLines）-> 3) 生成语音（把 translatedLines 传给 TTS，批量处理并导出SRT）"
+          description="1) 开始生�?-> 2) 独立英译（得�?translatedLines�?> 3) 生成语音（把 translatedLines 传给 TTS，批量处理并导出SRT�?
         />
 
         <ResultPanel
@@ -342,13 +337,13 @@ const ProductCopyPage = () => {
 
         {/* 音频播放区域 */}
         {ttsResults && (
-          <Card title="🎵 生成的音频" className="form-section">
+          <Card title="🎵 生成的音�? className="form-section">
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               {/* 逐条配音音频 */}
               {ttsResults.individual && ttsResults.individual.length > 0 && (
                 <div>
                   <Divider orientation="left">
-                    <Tag color="blue">逐条配音 ({ttsResults.individual.length}条)</Tag>
+                    <Tag color="blue">逐条配音 ({ttsResults.individual.length}�?</Tag>
                   </Divider>
                   <List
                     size="small"
@@ -367,7 +362,7 @@ const ProductCopyPage = () => {
                             ) : item.error ? (
                               <Typography.Text type="danger">生成失败: {item.error}</Typography.Text>
                             ) : (
-                              <Typography.Text type="warning">音频未生成</Typography.Text>
+                              <Typography.Text type="warning">音频未生�?/Typography.Text>
                             )}
                           </Space>
                         </List.Item>
@@ -393,7 +388,7 @@ const ProductCopyPage = () => {
                     ) : ttsResults.merged?.error ? (
                       <Typography.Text type="danger">生成失败: {ttsResults.merged.error}</Typography.Text>
                     ) : (
-                      <Typography.Text type="warning">音频未生成</Typography.Text>
+                      <Typography.Text type="warning">音频未生�?/Typography.Text>
                     );
                   })()}
                 </div>
@@ -402,12 +397,11 @@ const ProductCopyPage = () => {
           </Card>
         )}
 
-        {/* V2 功能：一键导入 + 生成音频 */}
-        <Card title="🎬 产品文案生成V2（带音频）" className="form-section">
+        {/* V2 功能：一键导�?+ 生成音频 */}
+        <Card title="🎬 产品文案生成V2（带音频�? className="form-section">
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Typography.Text type="secondary">
-              导入上一步生成的文案数据，调用 Coze 工作流生成带音频的完整结果
-            </Typography.Text>
+              导入上一步生成的文案数据，调�?Coze 工作流生成带音频的完整结�?            </Typography.Text>
             
             <Space>
               <Button type="default" onClick={handleImportData} disabled={!streamText}>
@@ -419,15 +413,14 @@ const ProductCopyPage = () => {
                 onClick={handleGenerateV2}
                 disabled={!v2Result?.buwei}
               >
-                开始生成
-              </Button>
+                开始生�?              </Button>
             </Space>
 
             {v2Progress > 0 && v2Progress < 100 && (
               <Progress percent={v2Progress} size="small" />
             )}
 
-            {/* 显示导入的数据 */}
+            {/* 显示导入的数�?*/}
             {v2Result && (
               <div style={{ background: '#f6f8fa', padding: 16, borderRadius: 8 }}>
                 <Typography.Text strong>已导入数据：</Typography.Text>
@@ -439,17 +432,17 @@ const ProductCopyPage = () => {
                     <Tag color="green">产品: {v2Result.changping}</Tag>
                   )}
                   {v2Result.donzuojiexi && (
-                    <Tag color="orange">动作解析: {v2Result.donzuojiexi.length} 项</Tag>
+                    <Tag color="orange">动作解析: {v2Result.donzuojiexi.length} �?/Tag>
                   )}
                 </div>
               </div>
             )}
 
-            {/* 显示生成的音频 */}
+            {/* 显示生成的音�?*/}
             {v2Result?.koubo_mp3_Array && v2Result.koubo_mp3_Array.length > 0 && (
               <div>
                 <Divider orientation="left">
-                  <Tag color="blue">逐条音频 ({v2Result.koubo_mp3_Array.length}条)</Tag>
+                  <Tag color="blue">逐条音频 ({v2Result.koubo_mp3_Array.length}�?</Tag>
                 </Divider>
                 <List
                   size="small"
