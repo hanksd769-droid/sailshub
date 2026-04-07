@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { pool } from '../db';
-import { authenticateToken } from '../middleware/auth';
+import { authRequired } from '../middleware/auth';
 
 const router = Router();
 
-// 获取文案库列表
-router.get('/', authenticateToken, async (req, res) => {
+// 获取文案库列�?
+router.get('/', authRequired, async (req, res) => {
   try {
     const userId = (req as any).user?.id;
     const result = await pool.query(
@@ -17,13 +17,13 @@ router.get('/', authenticateToken, async (req, res) => {
     );
     res.json({ success: true, data: result.rows });
   } catch (error) {
-    console.error('获取文案库失败:', error);
-    res.status(500).json({ success: false, error: '获取文案库失败' });
+    console.error('获取文案库失�?', error);
+    res.status(500).json({ success: false, error: '获取文案库失�? });
   }
 });
 
 // 获取单个文案详情
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authRequired, async (req, res) => {
   try {
     const userId = (req as any).user?.id;
     const { id } = req.params;
@@ -32,7 +32,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       [id, userId]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: '文案不存在' });
+      return res.status(404).json({ success: false, error: '文案不存�? });
     }
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
@@ -42,7 +42,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // 创建文案
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authRequired, async (req, res) => {
   try {
     const userId = (req as any).user?.id;
     const {
@@ -88,7 +88,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // 更新文案
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authRequired, async (req, res) => {
   try {
     const userId = (req as any).user?.id;
     const { id } = req.params;
@@ -137,7 +137,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: '文案不存在' });
+      return res.status(404).json({ success: false, error: '文案不存�? });
     }
 
     res.json({ success: true, data: result.rows[0] });
@@ -148,7 +148,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // 删除文案
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authRequired, async (req, res) => {
   try {
     const userId = (req as any).user?.id;
     const { id } = req.params;
@@ -157,7 +157,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       [id, userId]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: '文案不存在' });
+      return res.status(404).json({ success: false, error: '文案不存�? });
     }
     res.json({ success: true, message: '删除成功' });
   } catch (error) {
