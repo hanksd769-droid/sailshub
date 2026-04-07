@@ -161,3 +161,48 @@ export const ttsFromLines = async (lines: string[], mode: 'individual' | 'merged
     body: JSON.stringify({ lines, mode }),
   });
 };
+
+// 文案库 API
+export interface CopyLibraryItem {
+  id?: number;
+  name: string;
+  buwei?: string[];
+  changping?: string;
+  donzuojiexi?: string[];
+  erchuanwenan?: string;
+  wenan_array_string?: string[];
+  wenan_fenxi?: string;
+  translated_lines?: string[];
+  tts_individual?: Array<{ line: string; index: number; tts?: unknown; error?: string }>;
+  tts_merged?: { txt: string; tts?: unknown; error?: string };
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const getCopyLibrary = async () => {
+  return apiFetch<{ success: boolean; data: CopyLibraryItem[] }>('/api/copy-library');
+};
+
+export const getCopyLibraryItem = async (id: number) => {
+  return apiFetch<{ success: boolean; data: CopyLibraryItem }>(`/api/copy-library/${id}`);
+};
+
+export const createCopyLibraryItem = async (data: CopyLibraryItem) => {
+  return apiFetch<{ success: boolean; data: CopyLibraryItem }>('/api/copy-library', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const updateCopyLibraryItem = async (id: number, data: CopyLibraryItem) => {
+  return apiFetch<{ success: boolean; data: CopyLibraryItem }>(`/api/copy-library/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+export const deleteCopyLibraryItem = async (id: number) => {
+  return apiFetch<{ success: boolean; message: string }>(`/api/copy-library/${id}`, {
+    method: 'DELETE',
+  });
+};

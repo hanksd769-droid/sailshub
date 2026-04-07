@@ -13,6 +13,7 @@ import TranslationPage from './pages/TranslationPage';
 import VoiceGeneratorPage from './pages/VoiceGeneratorPage';
 import RunsPage from './pages/RunsPage';
 import MixCutPage from './pages/MixCutPage';
+import CopyLibraryPage from './pages/CopyLibraryPage';
 import { apiFetch, clearToken, getToken, setUnauthorizedHandler } from './lib/api';
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
@@ -62,6 +63,7 @@ const AppRoutes = () => {
         <Route path="/modules/translation" element={<TranslationPage />} />
         <Route path="/modules/voice-generator" element={<VoiceGeneratorPage />} />
         <Route path="/modules/mix-cut" element={<MixCutPage />} />
+        <Route path="/copy-library" element={<CopyLibraryPage />} />
       </Route>
     </Routes>
   );

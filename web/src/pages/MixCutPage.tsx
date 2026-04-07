@@ -1,8 +1,10 @@
-import { Button, Card, Form, Input, Space, Typography, message, List, Tag, Divider } from 'antd';
-import { useState } from 'react';
-import { runWorkflowStream } from '../lib/api';
+import { Button, Card, Form, Input, Space, Typography, message, List, Tag, Divider, Select } from 'antd';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { runWorkflowStream, getCopyLibrary, type CopyLibraryItem } from '../lib/api';
 
 const MixCutPage = () => {
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<{
@@ -10,7 +12,40 @@ const MixCutPage = () => {
     koubo_mp3_hebin?: string;
   } | null>(null);
 
+  const [copyLibrary, setCopyLibrary] = useState<CopyLibraryItem[]>([]);
+  const [selectedCopyId, setSelectedCopyId] = useState<number | null>(null);
+
   const [form] = Form.useForm();
+
+  // 加载文案库
+  useEffect(() => {
+    const fetchLibrary = async () => {
+      try {
+        const res = await getCopyLibrary();
+        if (res.success) {
+          setCopyLibrary(res.data);
+        }
+      } catch {
+        // 忽略错误
+      }
+    };
+    fetchLibrary();
+  }, []);
+
+  // 从文案库页面跳转过来的数据
+  useEffect(() => {
+    const state = location.state as { copyData?: CopyLibraryItem } | null;
+    if (state?.copyData) {
+      const data = state.copyData;
+      form.setFieldsValue({
+        buwei: data.buwei?.join('\n'),
+        changping: data.changping,
+        donzuojiexi: data.donzuojiexi?.join('\n'),
+      });
+      // 清除 state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, form]);
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
@@ -71,6 +106,35 @@ const MixCutPage = () => {
       </div>
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        {/* 从文案库选择 */}
+        {copyLibrary.length > 0 && (
+          <Card className="form-section">
+            <Form.Item label="从文案库导入" style={{ marginBottom: 0 }}>
+              <Select
+                placeholder="选择已保存的文案"
+                allowClear
+                style={{ width: '100%' }}
+                options={copyLibrary.map((item) => ({
+                  label: item.name,
+                  value: item.id,
+                }))}
+                onChange={(value) => {
+                  const item = copyLibrary.find((i) => i.id === value);
+                  if (item) {
+                    form.setFieldsValue({
+                      buwei: item.buwei?.join('\n'),
+                      changping: item.changping,
+                      donzuojiexi: item.donzuojiexi?.join('\n'),
+                    });
+                    setSelectedCopyId(value);
+                    message.success(`已导入：${item.name}`);
+                  }
+                }}
+              />
+            </Form.Item>
+          </Card>
+        )}
+
         <Card className="form-section">
           <Form
             layout="vertical"

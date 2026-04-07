@@ -30,5 +30,22 @@ export const ensureSchema = async () => {
       created_at timestamptz not null default now(),
       finished_at timestamptz
     );
+
+    create table if not exists copy_library (
+      id serial primary key,
+      user_id integer references users(id),
+      name varchar(256) not null,
+      buwei jsonb,
+      changping varchar(256),
+      donzuojiexi jsonb,
+      erchuanwenan text,
+      wenan_array_string jsonb,
+      wenan_fenxi text,
+      translated_lines jsonb,
+      tts_individual jsonb,
+      tts_merged jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
   `);
 };

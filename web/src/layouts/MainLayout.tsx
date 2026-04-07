@@ -11,6 +11,7 @@ import {
   SoundOutlined,
   GlobalOutlined,
   ScissorOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -33,6 +34,7 @@ const MainLayout = () => {
     { key: '/modules/translation', icon: <GlobalOutlined />, label: <NavLink to="/modules/translation">翻译功能</NavLink> },
     { key: '/modules/voice-generator', icon: <SoundOutlined />, label: <NavLink to="/modules/voice-generator">语音生成</NavLink> },
     { key: '/modules/mix-cut', icon: <ScissorOutlined />, label: <NavLink to="/modules/mix-cut">混剪功能</NavLink> },
+    { key: '/copy-library', icon: <DatabaseOutlined />, label: <NavLink to="/copy-library">文案库</NavLink> },
   ];
 
   return (

@@ -6,6 +6,7 @@ import modulesRoutes from './routes/modules';
 import filesRoutes from './routes/files';
 import runsRoutes from './routes/runs';
 import voiceRoutes from './routes/voice';
+import copyLibraryRoutes from './routes/copyLibrary';
 import { config } from './config';
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api/modules', modulesRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/runs', runsRoutes);
 app.use('/api/voice', voiceRoutes);
+app.use('/api/copy-library', copyLibraryRoutes);
 
 ensureSchema().then(() => {
   app.listen(config.port, () => {

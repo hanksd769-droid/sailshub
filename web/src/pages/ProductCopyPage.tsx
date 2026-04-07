@@ -1,7 +1,7 @@
-import { Button, Card, Form, Input, Select, Space, Typography, message, Divider, List, Tag } from 'antd';
+import { Button, Card, Form, Input, Select, Space, Typography, message, Divider, List, Tag, Modal } from 'antd';
 import { useState } from 'react';
 import ResultPanel from '../components/ResultPanel';
-import { runWorkflowStream, translateLinesFromCopy, ttsFromLines } from '../lib/api';
+import { runWorkflowStream, translateLinesFromCopy, ttsFromLines, createCopyLibraryItem } from '../lib/api';
 
 const templateOptions = [
   { label: '知识科普', value: '知识科普' },
@@ -27,6 +27,9 @@ const ProductCopyPage = () => {
     individual?: Array<{ line: string; index: number; tts?: unknown; error?: string }>;
     merged?: { txt: string; tts?: unknown; error?: string };
   } | null>(null);
+
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [saveForm] = Form.useForm();
 
   const [form] = Form.useForm();
 
@@ -142,6 +145,50 @@ const ProductCopyPage = () => {
       return data.data[0].url;
     }
     return null;
+  };
+
+  // 保存到文案库
+  const handleSaveToLibrary = async (values: { name: string }) => {
+    try {
+      // 解析生成结果
+      let buwei: string[] = [];
+      let changping = '';
+      let donzuojiexi: string[] = [];
+      let erchuanwenan = '';
+      let wenan_array_string: string[] = [];
+      let wenan_fenxi = '';
+
+      try {
+        const parsed = JSON.parse(streamText);
+        buwei = parsed.buwei || [];
+        changping = parsed.changping || '';
+        donzuojiexi = parsed.donzuojiexi || [];
+        erchuanwenan = parsed.erchuanwenan || '';
+        wenan_array_string = parsed.wenan_Array_string || [];
+        wenan_fenxi = parsed.wenan_fenxi || '';
+      } catch {
+        // 解析失败使用空值
+      }
+
+      await createCopyLibraryItem({
+        name: values.name,
+        buwei,
+        changping,
+        donzuojiexi,
+        erchuanwenan,
+        wenan_array_string,
+        wenan_fenxi,
+        translated_lines: translatedLines,
+        tts_individual: ttsResults?.individual,
+        tts_merged: ttsResults?.merged,
+      });
+
+      message.success('保存到文案库成功');
+      setIsSaveModalOpen(false);
+      saveForm.resetFields();
+    } catch (error) {
+      message.error('保存失败');
+    }
   };
 
   return (
@@ -283,7 +330,42 @@ const ProductCopyPage = () => {
             </Space>
           </Card>
         )}
+
+        {/* 保存到文案库按钮 */}
+        {(streamText || translatedLines.length > 0 || ttsResults) && (
+          <Card className="form-section">
+            <Button type="primary" onClick={() => setIsSaveModalOpen(true)}>
+              保存到文案库
+            </Button>
+          </Card>
+        )}
       </Space>
+
+      {/* 保存到文案库模态框 */}
+      <Modal
+        title="保存到文案库"
+        open={isSaveModalOpen}
+        onCancel={() => setIsSaveModalOpen(false)}
+        footer={null}
+      >
+        <Form form={saveForm} layout="vertical" onFinish={handleSaveToLibrary}>
+          <Form.Item
+            label="文案名称"
+            name="name"
+            rules={[{ required: true, message: '请输入文案名称' }]}
+          >
+            <Input placeholder="例如：水杨酸精华文案" />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                保存
+              </Button>
+              <Button onClick={() => setIsSaveModalOpen(false)}>取消</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };
