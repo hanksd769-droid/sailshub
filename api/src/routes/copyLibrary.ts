@@ -4,10 +4,10 @@ import { authRequired } from '../middleware/auth';
 
 const router = Router();
 
-// 获取文案库列�?
+// 获取文案库列表
 router.get('/', authRequired, async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const result = await pool.query(
       `SELECT id, name, changping, created_at, updated_at 
        FROM copy_library 
@@ -17,34 +17,34 @@ router.get('/', authRequired, async (req, res) => {
     );
     res.json({ success: true, data: result.rows });
   } catch (error) {
-    console.error('获取文案库失�?', error);
-    res.status(500).json({ success: false, error: '获取文案库失�? });
+    console.error('Get copy library failed:', error);
+    res.status(500).json({ success: false, error: 'Failed to get copy library' });
   }
 });
 
 // 获取单个文案详情
 router.get('/:id', authRequired, async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const { id } = req.params;
     const result = await pool.query(
       `SELECT * FROM copy_library WHERE id = $1 AND user_id = $2`,
       [id, userId]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: '文案不存�? });
+      return res.status(404).json({ success: false, error: 'Copy not found' });
     }
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
-    console.error('获取文案详情失败:', error);
-    res.status(500).json({ success: false, error: '获取文案详情失败' });
+    console.error('Get copy detail failed:', error);
+    res.status(500).json({ success: false, error: 'Failed to get copy detail' });
   }
 });
 
 // 创建文案
 router.post('/', authRequired, async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const {
       name,
       buwei,
@@ -82,15 +82,15 @@ router.post('/', authRequired, async (req, res) => {
 
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
-    console.error('创建文案失败:', error);
-    res.status(500).json({ success: false, error: '创建文案失败' });
+    console.error('Create copy failed:', error);
+    res.status(500).json({ success: false, error: 'Failed to create copy' });
   }
 });
 
 // 更新文案
 router.put('/:id', authRequired, async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const { id } = req.params;
     const {
       name,
@@ -137,32 +137,32 @@ router.put('/:id', authRequired, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: '文案不存�? });
+      return res.status(404).json({ success: false, error: 'Copy not found' });
     }
 
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
-    console.error('更新文案失败:', error);
-    res.status(500).json({ success: false, error: '更新文案失败' });
+    console.error('Update copy failed:', error);
+    res.status(500).json({ success: false, error: 'Failed to update copy' });
   }
 });
 
 // 删除文案
 router.delete('/:id', authRequired, async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const { id } = req.params;
     const result = await pool.query(
       `DELETE FROM copy_library WHERE id = $1 AND user_id = $2 RETURNING id`,
       [id, userId]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: '文案不存�? });
+      return res.status(404).json({ success: false, error: 'Copy not found' });
     }
-    res.json({ success: true, message: '删除成功' });
+    res.json({ success: true, message: 'Deleted successfully' });
   } catch (error) {
-    console.error('删除文案失败:', error);
-    res.status(500).json({ success: false, error: '删除文案失败' });
+    console.error('Delete copy failed:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete copy' });
   }
 });
 
