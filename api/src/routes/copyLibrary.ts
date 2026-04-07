@@ -9,13 +9,19 @@ router.get('/', authRequired, async (req, res) => {
   try {
     const userId = (req as any).user?.userId;
     const result = await pool.query(
-      `SELECT id, name, changping, created_at, updated_at 
+      `SELECT id, name, buwei, changping, donzuojiexi, created_at, updated_at 
        FROM copy_library 
        WHERE user_id = $1 
        ORDER BY updated_at DESC`,
       [userId]
     );
-    res.json({ success: true, data: result.rows });
+    // 解析 JSON 字段
+    const data = result.rows.map((row) => ({
+      ...row,
+      buwei: typeof row.buwei === 'string' ? JSON.parse(row.buwei) : row.buwei,
+      donzuojiexi: typeof row.donzuojiexi === 'string' ? JSON.parse(row.donzuojiexi) : row.donzuojiexi,
+    }));
+    res.json({ success: true, data });
   } catch (error) {
     console.error('Get copy library failed:', error);
     res.status(500).json({ success: false, error: 'Failed to get copy library' });

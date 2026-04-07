@@ -13,6 +13,7 @@
 - [index.ts](file://api/src/index.ts)
 - [config.ts](file://api/src/config.ts)
 - [runs.ts](file://api/src/routes/runs.ts)
+- [voice.ts](file://api/src/routes/voice.ts)
 - [copyLibrary.ts](file://api/src/routes/copyLibrary.ts)
 - [db.ts](file://api/src/db.ts)
 - [CopyLibraryPage.tsx](file://web/src/pages/CopyLibraryPage.tsx)
@@ -27,6 +28,9 @@
 - 移除了 V2 音频生成功能，专注于传统的文案生成、翻译和语音合成流程
 - 新增保存到复制库功能，支持将生成的文案内容保存到库中
 - 新增复制库页面，提供完整的文案库管理功能
+- **新增** 自动重试机制：翻译和TTS各3次重试，带1秒和1.5秒延迟
+- **新增** 选择性重试功能：针对单个失败音频项的重试按钮
+- **新增** 增强错误处理和用户反馈机制
 - 修复了中文模板选项显示问题，解决了字符编码导致的中文乱码问题
 - 增强了 UI 文本的正确渲染，确保中文界面元素正常显示
 - 更新了 V2 功能的中文支持，完善了中文界面的本地化显示
@@ -38,11 +42,12 @@
 3. [核心组件](#核心组件)
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
-6. [复制库功能](#复制库功能)
-7. [依赖关系分析](#依赖关系分析)
-8. [性能考虑](#性能考虑)
-9. [故障排除指南](#故障排除指南)
-10. [结论](#结论)
+6. [自动重试机制](#自动重试机制)
+7. [复制库功能](#复制库功能)
+8. [依赖关系分析](#依赖关系分析)
+9. [性能考虑](#性能考虑)
+10. [故障排除指南](#故障排除指南)
+11. [结论](#结论)
 
 ## 简介
 
@@ -52,13 +57,18 @@
 
 **新增** 新增保存到复制库功能，用户可以将生成的文案、翻译结果和语音文件保存到个人文案库中，便于后续复用和管理。复制库支持完整的 CRUD 操作，包括创建、查看、编辑、删除和使用。
 
+**新增** 重大增强的错误处理机制，包括自动重试功能和选择性重试功能，显著提升了系统的稳定性和用户体验。
+
 该系统采用前后端分离架构，前端使用 React + Ant Design 构建用户界面，后端基于 Express.js 提供 RESTful API 服务。核心功能包括：
 
 - **智能文案生成**：基于预设模板和产品信息生成专业营销文案
-- **多语言翻译**：支持独立的英文翻译功能
-- **语音合成**：将文本转换为高质量的语音文件（MP3+WAV）
+- **多语言翻译**：支持独立的英文翻译功能，具备自动重试机制
+- **语音合成**：将文本转换为高质量的语音文件（MP3+WAV），支持批量和单条处理
 - **实时流式处理**：提供渐进式的用户体验反馈
 - **复制库管理**：保存和管理生成的文案内容
+- **自动重试机制**：翻译和TTS各3次重试，带1秒和1.5秒延迟
+- **选择性重试**：针对单个失败音频项的重试按钮
+- **增强错误处理**：完善的错误处理和用户反馈机制
 - **中文字符编码支持**：确保中文界面元素的正确显示
 
 ## 项目结构
@@ -81,26 +91,28 @@ I[index.ts] --> J[config.ts]
 I --> K[routes/]
 K --> L[modules.ts]
 K --> M[runs.ts]
-K --> N[copyLibrary.ts]
+K --> N[voice.ts]
+K --> O[copyLibrary.ts]
 end
 subgraph "数据库"
-O[PostgreSQL 数据库]
-P[users 表]
-Q[copu_library 表]
+P[PostgreSQL 数据库]
+Q[users 表]
+R[copu_library 表]
 end
 F --> I
 C --> I
 G --> I
 H --> I
-I --> O
-O --> P
-O --> Q
+I --> P
+P --> Q
+P --> R
 ```
 
 **图表来源**
 - [main.tsx:1-17](file://web/src/main.tsx#L1-L17)
 - [App.tsx:1-72](file://web/src/App.tsx#L1-L72)
 - [index.ts:1-29](file://api/src/index.ts#L1-L29)
+- [voice.ts:1-200](file://api/src/routes/voice.ts#L1-L200)
 - [copyLibrary.ts:1-170](file://api/src/routes/copyLibrary.ts#L1-L170)
 - [db.ts:34-49](file://api/src/db.ts#L34-L49)
 
@@ -117,8 +129,8 @@ O --> Q
 产品复制页面包含三个核心功能模块，每个模块都有独立的状态管理和数据处理逻辑：
 
 1. **文案生成模块**：负责调用 Coze 工作流生成产品文案
-2. **翻译模块**：提供独立的英文翻译功能
-3. **语音合成模块**：将文本转换为语音文件
+2. **翻译模块**：提供独立的英文翻译功能，具备自动重试机制
+3. **语音合成模块**：将文本转换为语音文件，支持批量和单条处理
 
 ### 复制库管理模块
 
@@ -149,10 +161,10 @@ stateDiagram-v2
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:13-374](file://web/src/pages/ProductCopyPage.tsx#L13-L374)
+- [ProductCopyPage.tsx:13-456](file://web/src/pages/ProductCopyPage.tsx#L13-L456)
 
 **章节来源**
-- [ProductCopyPage.tsx:13-374](file://web/src/pages/ProductCopyPage.tsx#L13-L374)
+- [ProductCopyPage.tsx:13-456](file://web/src/pages/ProductCopyPage.tsx#L13-L456)
 
 ## 架构概览
 
@@ -195,6 +207,7 @@ M --> O
 - [index.ts:1-29](file://api/src/index.ts#L1-L29)
 - [config.ts:13-19](file://api/src/config.ts#L13-L19)
 - [runs.ts:6-8](file://api/src/routes/runs.ts#L6-L8)
+- [voice.ts:1-200](file://api/src/routes/voice.ts#L1-L200)
 - [copyLibrary.ts:1-170](file://api/src/routes/copyLibrary.ts#L1-L170)
 - [db.ts:34-49](file://api/src/db.ts#L34-L49)
 
@@ -217,12 +230,12 @@ S-->>A : SSE 数据流
 A-->>P : 更新进度和结果
 P->>A : 调用 translateLinesFromCopy
 A->>S : POST /api/voice/translate-lines
-S-->>A : 返回翻译结果
+S-->>A : 返回翻译结果带自动重试
 P->>A : 调用 ttsFromLines
 A->>S : POST /api/voice/tts-from-lines
 S->>V : 调用语音合成
 V-->>S : 返回音频文件
-S-->>A : 返回语音结果
+S-->>A : 返回语音结果支持单条重试
 A-->>P : 显示音频播放器
 P->>A : 调用 createCopyLibraryItem
 A->>S : POST /api/copy-library
@@ -264,6 +277,7 @@ class ProductCopyPage {
 +handleTranslate() Promise
 +handleTtsFromTranslatedLines() Promise
 +handleSaveToLibrary(values) Promise
++handleRetrySingleTts(index) Promise
 +getAudioUrl(ttsData) string|null
 }
 class ResultPanel {
@@ -282,7 +296,7 @@ ProductCopyPage --> ApiClient : 使用
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:13-374](file://web/src/pages/ProductCopyPage.tsx#L13-L374)
+- [ProductCopyPage.tsx:13-456](file://web/src/pages/ProductCopyPage.tsx#L13-L456)
 - [ResultPanel.tsx:3-118](file://web/src/components/ResultPanel.tsx#L3-L118)
 
 #### 表单配置
@@ -318,7 +332,7 @@ K --> L[关闭模态框]
 ```
 
 **图表来源**
-- [ProductCopyPage.tsx:150-192](file://web/src/pages/ProductCopyPage.tsx#L150-L192)
+- [ProductCopyPage.tsx:219-261](file://web/src/pages/ProductCopyPage.tsx#L219-L261)
 - [api.ts:190-195](file://web/src/lib/api.ts#L190-L195)
 
 保存功能支持以下数据字段：
@@ -329,8 +343,86 @@ K --> L[关闭模态框]
 - **语音文件**：逐条配音和合并配音结果
 
 **章节来源**
-- [ProductCopyPage.tsx:150-192](file://web/src/pages/ProductCopyPage.tsx#L150-L192)
-- [ProductCopyPage.tsx:334-369](file://web/src/pages/ProductCopyPage.tsx#L334-L369)
+- [ProductCopyPage.tsx:219-261](file://web/src/pages/ProductCopyPage.tsx#L219-L261)
+- [ProductCopyPage.tsx:416-450](file://web/src/pages/ProductCopyPage.tsx#L416-L450)
+
+## 自动重试机制
+
+**新增** 产品复制页面实现了完善的自动重试机制，显著提升了系统的稳定性和用户体验：
+
+### 翻译模块自动重试
+
+翻译功能实现了3次自动重试机制，每次重试间隔不同：
+
+```mermaid
+flowchart TD
+A[开始翻译] --> B{第一次尝试}
+B --> |成功| C[返回翻译结果]
+B --> |失败| D[等待1秒]
+D --> E{第二次尝试}
+E --> |成功| C
+E --> |失败| F[等待1.5秒]
+F --> G{第三次尝试}
+G --> |成功| C
+G --> |失败| H[显示错误]
+```
+
+**图表来源**
+- [ProductCopyPage.tsx:105-139](file://web/src/pages/ProductCopyPage.tsx#L105-L139)
+
+### 语音合成自动重试
+
+语音合成同样实现了3次自动重试机制：
+
+```mermaid
+flowchart TD
+A[开始语音合成] --> B{第一次尝试}
+B --> |成功| C[返回语音结果]
+B --> |失败| D[等待1秒]
+D --> E{第二次尝试}
+E --> |成功| C
+E --> |失败| F[等待1.5秒]
+F --> G{第三次尝试}
+G --> |成功| C
+G --> |失败| H[显示错误]
+```
+
+**图表来源**
+- [ProductCopyPage.tsx:150-182](file://web/src/pages/ProductCopyPage.tsx#L150-L182)
+
+### 选择性重试功能
+
+**新增** 针对单个失败音频项的选择性重试功能：
+
+```mermaid
+flowchart TD
+A[显示音频列表] --> B{检测到失败项}
+B --> |是| C[显示重试按钮]
+B --> |否| D[正常显示]
+C --> E[用户点击重试]
+E --> F[调用单条TTS]
+F --> G{重试成功?}
+G --> |是| H[更新单条结果]
+G --> |否| I[显示重试失败]
+```
+
+**图表来源**
+- [ProductCopyPage.tsx:193-217](file://web/src/pages/ProductCopyPage.tsx#L193-L217)
+
+### 错误处理和用户反馈
+
+系统实现了多层次的错误处理和用户反馈机制：
+
+1. **进度提示**：使用 `message.loading()` 提供实时进度反馈
+2. **成功通知**：使用 `message.success()` 确认操作成功
+3. **错误提示**：使用 `message.error()` 显示错误信息
+4. **警告提示**：使用 `message.warning()` 提示用户注意
+5. **自动清理**：使用 `message.destroy()` 清理之前的提示
+
+**章节来源**
+- [ProductCopyPage.tsx:105-139](file://web/src/pages/ProductCopyPage.tsx#L105-L139)
+- [ProductCopyPage.tsx:150-182](file://web/src/pages/ProductCopyPage.tsx#L150-L182)
+- [ProductCopyPage.tsx:193-217](file://web/src/pages/ProductCopyPage.tsx#L193-L217)
 
 ## 复制库功能
 
@@ -483,6 +575,7 @@ K[复制库路由] --> E
 3. **内存管理**：及时清理事件监听器和定时器
 4. **资源压缩**：生产环境启用代码分割和资源压缩
 5. **模态框优化**：复制库模态框按需渲染，减少DOM节点数量
+6. **重试优化**：智能重试机制避免过度请求，提升用户体验
 
 ### 后端性能优化
 
@@ -491,6 +584,7 @@ K[复制库路由] --> E
 3. **缓存策略**：对静态数据实施缓存
 4. **并发控制**：限制同时运行的工作流数量
 5. **JSONB字段**：使用PostgreSQL的JSONB类型存储结构化数据，提高查询效率
+6. **调试记录管理**：限制调试记录数量，避免内存泄漏
 
 ## 故障排除指南
 
@@ -517,15 +611,29 @@ K[复制库路由] --> E
 | 问题症状 | 可能原因 | 解决方案 |
 |----------|----------|----------|
 | 文案生成失败 | 工作流配置错误 | 检查工作流 ID 和参数 |
-| 翻译结果异常 | 翻译服务不可用 | 验证翻译服务配置 |
-| 语音合成失败 | 语音服务异常 | 检查语音服务 URL 配置 |
+| 翻译结果异常 | 翻译服务不可用 | 验证翻译服务配置，检查自动重试 |
+| 语音合成失败 | 语音服务异常 | 检查语音服务 URL 配置，使用选择性重试 |
 | 中文显示乱码 | 字符编码问题 | 检查 HTML 字符集设置 |
 | 保存失败 | 数据库连接问题 | 检查 PostgreSQL 连接配置 |
 | 复制库加载失败 | API 调用错误 | 检查 /api/copy-library 接口 |
 
+#### 自动重试相关问题
+
+**新增** 自动重试机制故障排除：
+
+| 问题症状 | 可能原因 | 解决方案 |
+|----------|----------|----------|
+| 翻译重试失败 | 网络不稳定或服务异常 | 检查网络连接，等待1秒或1.5秒后重试 |
+| 语音合成重试失败 | 语音服务不可用 | 使用选择性重试功能单独重试失败项 |
+| 重试次数过多 | 服务持续异常 | 检查服务状态，适当延长重试间隔 |
+| 选择性重试无效 | 单条TTS服务异常 | 检查单条TTS配置，确认服务可用性 |
+
 **章节来源**
 - [App.tsx:26-39](file://web/src/App.tsx#L26-L39)
 - [config.ts:5-11](file://api/src/config.ts#L5-L11)
+- [ProductCopyPage.tsx:105-139](file://web/src/pages/ProductCopyPage.tsx#L105-L139)
+- [ProductCopyPage.tsx:150-182](file://web/src/pages/ProductCopyPage.tsx#L150-L182)
+- [ProductCopyPage.tsx:193-217](file://web/src/pages/ProductCopyPage.tsx#L193-L217)
 
 ### 字符编码问题解决
 
@@ -549,6 +657,8 @@ K[复制库路由] --> E
 
 **新增** 最重要的更新是新增了保存到复制库功能，这是一个完整的文案内容管理系统。用户可以将生成的文案、翻译结果和语音文件保存到个人库中，实现内容的复用和管理。复制库页面提供了完整的CRUD操作，支持与混剪功能的无缝集成。
 
+**新增** 重大增强的错误处理机制，包括自动重试功能和选择性重试功能，显著提升了系统的稳定性和用户体验。翻译和TTS各实现3次自动重试，带1秒和1.5秒延迟，确保在网络不稳定或服务异常时仍能获得可靠的结果。选择性重试功能允许用户针对单个失败的音频项进行精确重试，无需重新执行整个流程。
+
 本次更新重点关注了字符编码改进，修复了中文模板选项显示问题，增强了 UI 文本的正确渲染，并完善了中文界面的本地化显示。这些改进确保了应用在中文环境下的稳定运行和良好的用户体验。
 
 ### 主要优势
@@ -561,6 +671,8 @@ K[复制库路由] --> E
 6. **中文支持完善**：解决了字符编码问题，确保中文界面元素正确显示
 7. **数据持久化**：通过复制库实现生成内容的长期保存
 8. **工作流集成**：复制库与混剪功能深度集成，提升工作效率
+9. **稳定性增强**：自动重试机制和选择性重试功能显著提升系统可靠性
+10. **错误处理完善**：多层次的错误处理和用户反馈机制
 
 ### 技术亮点
 
@@ -572,5 +684,8 @@ K[复制库路由] --> E
 - **字符编码修复**：解决了中文显示乱码问题，确保界面元素正确渲染
 - **数据库优化**：使用PostgreSQL JSONB字段存储结构化数据，提高查询效率
 - **API完整性**：提供完整的复制库CRUD操作接口
+- **智能重试机制**：翻译和TTS各3次自动重试，带不同延迟策略
+- **选择性重试功能**：针对单个失败音频项的精确重试能力
+- **增强的用户反馈**：多层次的消息提示和状态反馈机制
 
-该系统为类似的内容创作工具提供了优秀的参考范例，其设计理念和技术实现都值得深入学习和借鉴。特别是字符编码改进和复制库功能方面的实践，为中文Web应用开发和内容管理系统提供了宝贵的经验。
+该系统为类似的内容创作工具提供了优秀的参考范例，其设计理念和技术实现都值得深入学习和借鉴。特别是字符编码改进、复制库功能和自动重试机制方面的实践，为中文Web应用开发和内容管理系统提供了宝贵的经验。
