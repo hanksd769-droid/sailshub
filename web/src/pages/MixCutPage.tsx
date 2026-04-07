@@ -51,9 +51,8 @@ const MixCutPage = () => {
       const kouboHebin = mergedTts?.data?.[0]?.url || '';
 
       form.setFieldsValue({
-        Product_Name: data.name,
         buwei: data.buwei?.join('\n'),
-        changping: data.changping,
+        changping: data.name || data.changping,
         donzuojiexi: data.donzuojiexi?.join('\n'),
         koubo_mp3_Array: kouboArray.join('\n'),
         koubo_mp3_hebin: kouboHebin,
@@ -137,10 +136,25 @@ const MixCutPage = () => {
                 onChange={(value) => {
                   const item = copyLibrary.find((i) => i.id === value);
                   if (item) {
+                    // 提取音频URL
+                    const kouboArray: string[] = [];
+                    if (item.tts_individual) {
+                      for (const t of item.tts_individual) {
+                        const tts = t.tts as { data?: { url?: string }[] } | undefined;
+                        if (tts?.data?.[0]?.url) {
+                          kouboArray.push(tts.data[0].url);
+                        }
+                      }
+                    }
+                    const mergedTts = item.tts_merged as { data?: { url?: string }[] } | undefined;
+                    const kouboHebin = mergedTts?.data?.[0]?.url || '';
+
                     form.setFieldsValue({
                       buwei: item.buwei?.join('\n'),
-                      changping: item.changping,
+                      changping: item.name || item.changping,
                       donzuojiexi: item.donzuojiexi?.join('\n'),
+                      koubo_mp3_Array: kouboArray.join('\n'),
+                      koubo_mp3_hebin: kouboHebin,
                     });
                     setSelectedCopyId(value);
                     message.success(`已导入：${item.name}`);
