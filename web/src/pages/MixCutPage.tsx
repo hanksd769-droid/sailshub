@@ -37,10 +37,26 @@ const MixCutPage = () => {
     const state = location.state as { copyData?: CopyLibraryItem } | null;
     if (state?.copyData) {
       const data = state.copyData;
+      // 提取音频URL
+      const kouboArray: string[] = [];
+      if (data.tts_individual) {
+        for (const item of data.tts_individual) {
+          const tts = item.tts as { data?: { url?: string }[] } | undefined;
+          if (tts?.data?.[0]?.url) {
+            kouboArray.push(tts.data[0].url);
+          }
+        }
+      }
+      const mergedTts = data.tts_merged as { data?: { url?: string }[] } | undefined;
+      const kouboHebin = mergedTts?.data?.[0]?.url || '';
+
       form.setFieldsValue({
+        Product_Name: data.name,
         buwei: data.buwei?.join('\n'),
         changping: data.changping,
         donzuojiexi: data.donzuojiexi?.join('\n'),
+        koubo_mp3_Array: kouboArray.join('\n'),
+        koubo_mp3_hebin: kouboHebin,
       });
       // 清除 state
       window.history.replaceState({}, document.title);

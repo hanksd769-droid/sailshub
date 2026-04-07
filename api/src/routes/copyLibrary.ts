@@ -9,17 +9,30 @@ router.get('/', authRequired, async (req, res) => {
   try {
     const userId = (req as any).user?.userId;
     const result = await pool.query(
-      `SELECT id, name, buwei, changping, donzuojiexi, created_at, updated_at 
+      `SELECT id, name, buwei, changping, donzuojiexi, tts_individual, tts_merged, translated_lines, created_at, updated_at 
        FROM copy_library 
        WHERE user_id = $1 
        ORDER BY updated_at DESC`,
       [userId]
     );
     // 解析 JSON 字段
+    const parseJson = (val: unknown) => {
+      if (typeof val === 'string') {
+        try {
+          return JSON.parse(val);
+        } catch {
+          return val;
+        }
+      }
+      return val;
+    };
     const data = result.rows.map((row) => ({
       ...row,
-      buwei: typeof row.buwei === 'string' ? JSON.parse(row.buwei) : row.buwei,
-      donzuojiexi: typeof row.donzuojiexi === 'string' ? JSON.parse(row.donzuojiexi) : row.donzuojiexi,
+      buwei: parseJson(row.buwei),
+      donzuojiexi: parseJson(row.donzuojiexi),
+      tts_individual: parseJson(row.tts_individual),
+      tts_merged: parseJson(row.tts_merged),
+      translated_lines: parseJson(row.translated_lines),
     }));
     res.json({ success: true, data });
   } catch (error) {
