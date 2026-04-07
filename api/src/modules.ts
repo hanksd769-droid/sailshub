@@ -29,6 +29,11 @@ export const modules = {
     name: '混剪功能',
     workflowId: '7543514436666867753',
   },
+  'detail-image-no-ref-en': {
+    key: 'detail-image-no-ref-en',
+    name: '详情图生成（无参考图-英文版）',
+    workflowId: '7615552694573383734',
+  },
 } as const;
 
 export type ModuleKey = keyof typeof modules;

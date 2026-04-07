@@ -12,7 +12,7 @@ type StreamEvent = {
 };
 
 const DetailImagePage = () => {
-  const [branch, setBranch] = useState<'withRef' | 'noRef'>('withRef');
+  const [branch, setBranch] = useState<'withRef' | 'noRef' | 'noRefEn'>('withRef');
   const [streamText, setStreamText] = useState('');
   const [jsonText, setJsonText] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -32,6 +32,11 @@ const DetailImagePage = () => {
         key: 'noRef',
         label: '无参考图版本',
         workflowId: '7615500483961585691',
+      },
+      {
+        key: 'noRefEn',
+        label: '无参考图版本（英文版）',
+        workflowId: '7615552694573383734',
       },
     ],
     []
@@ -203,9 +208,10 @@ const DetailImagePage = () => {
         return;
       }
 
-      // 3) 无参考图：单次调用
+      // 3) 无参考图：单次调用（支持中文版和英文版）
+      const isEnglish = branch === 'noRefEn';
       await runWorkflowStream(
-        'detail-image-no-ref',
+        isEnglish ? 'detail-image-no-ref-en' : 'detail-image-no-ref',
         {
           img: mainImageParam,
           maidian: values.maidian,
@@ -329,15 +335,32 @@ const DetailImagePage = () => {
 
         <ResultPanel
           title="生成结果"
+          type="primary"
           streamText={streamText}
           jsonText={jsonText}
           loading={loading}
           progress={progress}
           errorText={errorText}
-          imageUrls={imageUrls}
           onCopyText={() => navigator.clipboard.writeText(streamText)}
           onCopyJson={() => navigator.clipboard.writeText(jsonText)}
         />
+
+        {/* 生成的图片预览 */}
+        {imageUrls.length > 0 && (
+          <Card title="生成的图片" className="form-section">
+            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+              {imageUrls.map((url, index) => (
+                <div key={index}>
+                  <img
+                    src={url}
+                    alt={`生成图片 ${index + 1}`}
+                    style={{ maxWidth: '100%', borderRadius: 8 }}
+                  />
+                </div>
+              ))}
+            </Space>
+          </Card>
+        )}
       </Space>
     </div>
   );
