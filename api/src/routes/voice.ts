@@ -144,7 +144,7 @@ const extractOutputArray = (value: unknown): string[] => {
     if (v.startsWith('{') && v.endsWith('}')) {
       try {
         const obj = JSON.parse(v) as Record<string, unknown>;
-        return extractOutputArray(obj.output ?? obj.data ?? obj.result ?? obj.text);
+        return extractOutputArray(obj.output ?? obj.data ?? obj.result ?? obj.text ?? obj.translated);
       } catch {
         // ignore
       }
@@ -153,7 +153,26 @@ const extractOutputArray = (value: unknown): string[] => {
 
   if (value && typeof value === 'object') {
     const obj = value as Record<string, unknown>;
-    return extractOutputArray(obj.output ?? obj.data ?? obj.result ?? obj.text);
+    // 尝试多种可能的字段名
+    const result = extractOutputArray(
+      obj.output ?? 
+      obj.data ?? 
+      obj.result ?? 
+      obj.text ?? 
+      obj.translated ??
+      obj.translation ??
+      obj.lines ??
+      obj.items
+    );
+    if (result.length > 0) return result;
+    
+    // 如果上面的字段都没有，尝试遍历对象的所有值
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string') {
+        return flattenToLines(val);
+      }
+    }
   }
 
   return [];

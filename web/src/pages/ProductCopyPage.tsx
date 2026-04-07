@@ -1,4 +1,5 @@
 import { Button, Card, Form, Input, Select, Space, Typography, message, Divider, List, Tag, Modal } from 'antd';
+import { RedoOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import ResultPanel from '../components/ResultPanel';
 import { runWorkflowStream, translateLinesFromCopy, ttsFromLines, createCopyLibraryItem } from '../lib/api';
@@ -101,19 +102,40 @@ const ProductCopyPage = () => {
     setTranslatedJson('');
     setTranslatedLines([]);
 
-    try {
-      const res = await translateLinesFromCopy(streamText);
-      const lines: string[] = res.data?.translatedLines || [];
-      setTranslatedLines(lines);
-      setTranslatedText(lines.join('\n'));
-      setTranslatedJson(JSON.stringify(res, null, 2));
-      message.success(`翻译完成，共 ${lines.length} 条`);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : '翻译失败';
-      message.error(msg);
-    } finally {
-      setTranslateLoading(false);
+    // 自动重试机制
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await translateLinesFromCopy(streamText);
+        const lines: string[] = res.data?.translatedLines || [];
+        if (lines.length > 0) {
+          setTranslatedLines(lines);
+          setTranslatedText(lines.join('\n'));
+          setTranslatedJson(JSON.stringify(res, null, 2));
+          message.success(`翻译完成，共 ${lines.length} 条`);
+          setTranslateLoading(false);
+          return;
+        }
+        // 如果返回空数组，继续重试
+        if (attempt < maxRetries) {
+          message.loading(`第 ${attempt} 次尝试未获取到结果，正在重试...`, 1);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('翻译失败');
+        if (attempt < maxRetries) {
+          message.loading(`第 ${attempt} 次尝试失败，正在重试...`, 1);
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+      }
     }
+
+    // 所有重试都失败了
+    setTranslateLoading(false);
+    const errorMsg = lastError?.message || '翻译失败，请稍后重试';
+    message.error(errorMsg);
   };
 
   const handleTtsFromTranslatedLines = async () => {
@@ -125,17 +147,38 @@ const ProductCopyPage = () => {
     setTtsLoading(true);
     setTtsResults(null);
 
-    try {
-      const res = await ttsFromLines(translatedLines, 'both');
-      setTtsResults(res.data.results);
-      message.success('语音生成完成（逐条+合并）');
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : '语音生成失败';
-      message.error(msg);
-      setTtsResults(null);
-    } finally {
-      setTtsLoading(false);
+    // 自动重试机制
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await ttsFromLines(translatedLines, 'both');
+        if (res.data?.results?.individual || res.data?.results?.merged) {
+          setTtsResults(res.data.results);
+          message.success('语音生成完成（逐条+合并）');
+          setTtsLoading(false);
+          return;
+        }
+        // 如果返回空结果，继续重试
+        if (attempt < maxRetries) {
+          message.loading(`第 ${attempt} 次尝试未获取到结果，正在重试...`, 1);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('语音生成失败');
+        if (attempt < maxRetries) {
+          message.loading(`第 ${attempt} 次尝试失败，正在重试...`, 1);
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+      }
     }
+
+    // 所有重试都失败了
+    setTtsLoading(false);
+    const errorMsg = lastError?.message || '语音生成失败，请稍后重试';
+    message.error(errorMsg);
+    setTtsResults(null);
   };
 
   const getAudioUrl = (ttsData: unknown): string | null => {
@@ -145,6 +188,32 @@ const ProductCopyPage = () => {
       return data.data[0].url;
     }
     return null;
+  };
+
+  // 单条语音重试
+  const handleRetrySingleTts = async (index: number) => {
+    if (!ttsResults?.individual || !translatedLines[index]) return;
+
+    const line = translatedLines[index];
+    message.loading(`正在重试第 ${index + 1} 条语音...`, 0);
+
+    try {
+      const res = await ttsFromLines([line], 'individual');
+      message.destroy();
+
+      if (res.data?.results?.individual?.[0]) {
+        // 更新单条结果
+        const newIndividual = [...ttsResults.individual];
+        newIndividual[index] = res.data.results.individual[0];
+        setTtsResults({ ...ttsResults, individual: newIndividual });
+        message.success(`第 ${index + 1} 条语音重试成功`);
+      } else {
+        message.error(`第 ${index + 1} 条语音重试失败`);
+      }
+    } catch (error) {
+      message.destroy();
+      message.error(`第 ${index + 1} 条语音重试失败`);
+    }
   };
 
   // 保存到文案库
@@ -287,10 +356,23 @@ const ProductCopyPage = () => {
                     dataSource={ttsResults.individual}
                     renderItem={(item, index) => {
                       const audioUrl = getAudioUrl(item.tts);
+                      const hasError = item.error || !audioUrl;
                       return (
                         <List.Item>
                           <Space direction="vertical" style={{ width: '100%' }}>
-                            <Typography.Text type="secondary">{index + 1}. {item.line.slice(0, 60)}{item.line.length > 60 ? '...' : ''}</Typography.Text>
+                            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                              <Typography.Text type="secondary">{index + 1}. {item.line.slice(0, 60)}{item.line.length > 60 ? '...' : ''}</Typography.Text>
+                              {hasError && (
+                                <Button
+                                  type="primary"
+                                  size="small"
+                                  icon={<RedoOutlined />}
+                                  onClick={() => handleRetrySingleTts(index)}
+                                >
+                                  重试
+                                </Button>
+                              )}
+                            </Space>
                             {audioUrl ? (
                               <audio controls style={{ width: '100%' }}>
                                 <source src={audioUrl} type="audio/wav" />

@@ -23,11 +23,10 @@
 
 ## 更新摘要
 **变更内容**
-- 新增复制库接口模块，提供完整的CRUD操作用于管理文案库
-- 复制库接口支持多维度文案管理（部位、产品、动作解析、翻译、语音等）
+- 认证中间件更新：用户ID提取方式从 `req.user.userId` 改为 `(req as any).user?.userId`
+- 国际化响应消息：所有错误消息已更新为中文，提升用户体验
+- 复制库API接口增强：完善认证中间件、用户ID提取方式和错误处理
 - 增强前端复制库页面，支持文案库的创建、编辑、删除和混剪使用
-- 扩展数据库schema，新增copy_library表结构
-- 更新路由挂载，新增/api/copy-library路由
 
 ## 目录
 1. [简介](#简介)
@@ -64,7 +63,7 @@ FILES["文件路由: /api/files/*"]
 RUNS["运行路由: /api/runs/* (SSE)"]
 VOICE["语音路由: /api/voice/*<br/>@gradio/client 集成"]
 COPYLIB["复制库路由: /api/copy-library/*<br/>CRUD 操作"]
-MW["中间件: auth.ts"]
+MW["中间件: auth.ts<br/>中文消息 + 类型安全"]
 CFG["配置: config.ts"]
 DB["数据库: db.ts"]
 UTIL["工具: utils.ts"]
@@ -109,7 +108,7 @@ VOICEPAGE --> WEBAPI
 - [api/src/routes/modules.ts:1-20](file://api/src/routes/modules.ts#L1-L20)
 - [api/src/routes/files.ts:1-43](file://api/src/routes/files.ts#L1-L43)
 - [api/src/routes/runs.ts:1-159](file://api/src/routes/runs.ts#L1-L159)
-- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
+- [api/src/routes/voice.ts:1-421](file://api/src/routes/voice.ts#L1-L421)
 - [api/src/routes/copyLibrary.ts:1-170](file://api/src/routes/copyLibrary.ts#L1-L170)
 - [api/src/middleware/auth.ts:1-23](file://api/src/middleware/auth.ts#L1-L23)
 - [api/src/config.ts:1-19](file://api/src/config.ts#L1-L19)
@@ -128,7 +127,7 @@ VOICEPAGE --> WEBAPI
 - 应用入口与路由挂载：在入口文件中启用 CORS、JSON 解析、健康检查，并将各子路由挂载至 /api/*。
 - 配置系统：读取环境变量并校验必需项（COZE_API_TOKEN、DATABASE_URL、JWT_SECRET、VOICE_BASE_URL），同时暴露端口与服务地址。
 - 数据库：使用 PostgreSQL 连接池，初始化 users、runs 和 **新增的 copy_library** 表。
-- 认证中间件：基于 JWT 的 Bearer Token 鉴权，支持用户信息注入到请求上下文。
+- 认证中间件：基于 JWT 的 Bearer Token 鉴权，支持用户信息注入到请求上下文，**更新**为中文错误消息。
 - 工具函数：密码哈希/校验、JWT 签发/校验。
 - Coze 客户端：封装 @coze/api，统一访问 Coze 平台能力。
 - 模块定义：集中管理可用工作流模块及其 workflow_id。
@@ -162,7 +161,7 @@ API->>DB : "插入用户记录"
 DB-->>API : "返回用户ID/角色"
 API-->>FE : "返回 JWT Token"
 FE->>API : "POST /api/copy-library"
-API->>AUTH : "校验 Bearer Token"
+API->>AUTH : "校验 Bearer Token<br/>中文错误消息"
 AUTH-->>API : "通过"
 API->>DB : "插入复制库记录"
 DB-->>API : "返回新记录"
@@ -194,7 +193,7 @@ API-->>FE : "返回 TTS 结果"
 - [api/src/routes/auth.ts:1-115](file://api/src/routes/auth.ts#L1-L115)
 - [api/src/routes/copyLibrary.ts:1-170](file://api/src/routes/copyLibrary.ts#L1-L170)
 - [api/src/routes/runs.ts:1-159](file://api/src/routes/runs.ts#L1-L159)
-- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
+- [api/src/routes/voice.ts:1-421](file://api/src/routes/voice.ts#L1-L421)
 - [api/src/middleware/auth.ts:1-23](file://api/src/middleware/auth.ts#L1-L23)
 - [api/src/db.ts:1-52](file://api/src/db.ts#L1-L52)
 - [api/src/coze.ts:1-8](file://api/src/coze.ts#L1-L8)
@@ -209,23 +208,23 @@ API-->>FE : "返回 TTS 结果"
   - 方法与路径：POST /api/auth/register
   - 请求体：{ username, email?, password }
   - 成功响应：{ success: true, data: { token } }
-  - 失败场景：缺少字段（400）、用户名已存在（409）
+  - 失败场景：缺少字段（400，中文消息："缺少必填字段"）、用户名已存在（409，中文消息："账号已存在"）
 - 登录
   - 方法与路径：POST /api/auth/login
   - 请求体：{ username, password }
   - 成功响应：{ success: true, data: { token } }
-  - 失败场景：账号或密码错误（401）
+  - 失败场景：账号或密码错误（401，中文消息："账号或密码错误"）
 - 重置密码
   - 方法与路径：POST /api/auth/reset-password
   - 请求头：Authorization: Bearer {token}
   - 请求体：{ username?, newPassword }
   - 成功响应：{ success: true, message: "密码重置成功" }
-  - 失败场景：缺少新密码（400）、无权限（403）、用户不存在（404）、登录失效（401）
+  - 失败场景：缺少新密码（400，中文消息："缺少新密码"）、无权限（403）、用户不存在（404，中文消息："用户不存在"）、登录失效（401，中文消息："登录失效"）
 - 当前用户
   - 方法与路径：GET /api/auth/me
   - 请求头：Authorization: Bearer {token}
   - 成功响应：{ success: true, data: { id, username, email, role } }
-  - 失败场景：登录失效（401）
+  - 失败场景：登录失效（401，中文消息："登录失效"）
 
 认证流程（登录/注册）时序
 
@@ -279,7 +278,7 @@ A-->>C : "{ token }"
   - 请求体：{ parameters: Record<string, unknown> }
   - 成功响应：HTTP 200，SSE 流
     - 事件类型：data（携带增量事件）、done（结束）、error（异常）
-  - 失败场景：模块不存在（404）、缺少参数（400）、登录失效（401）
+  - 失败场景：模块不存在（404，中文消息："模块不存在"）、缺少参数（400，中文消息："缺少参数"）、登录失效（401，中文消息："登录失效"）
   - 数据持久化：首次写入 runs 记录，流结束后更新状态与输出
 
 运行接口（SSE）时序
@@ -324,14 +323,14 @@ end
   - 请求头：Authorization: Bearer {token}, Content-Type: multipart/form-data
   - 表单字段：file（二进制文件）
   - 成功响应：{ success: true, data: Coze 文件对象 }
-  - 失败场景：缺少文件（400）、Coze 上传失败（500）
+  - 失败场景：缺少文件（400，中文消息："缺少文件"）、Coze 上传失败（500）
 
 文件上传流程
 
 ```mermaid
 flowchart TD
 Start(["开始"]) --> CheckFile["检查 multipart file 是否存在"]
-CheckFile --> |否| Err400["返回 400 缺少文件"]
+CheckFile --> |否| Err400["返回 400 缺少文件<br/>中文消息：'缺少文件'"]
 CheckFile --> |是| BuildForm["构建 FormData 并附加文件"]
 BuildForm --> CallCoze["调用 https://api.coze.cn/v1/files/upload"]
 CallCoze --> RespOK{"响应 ok?"}
@@ -355,19 +354,19 @@ Parse --> Done["返回 {success:true,data}"]
   - 方法与路径：GET /api/voice/config
   - 请求头：Authorization: Bearer {token}
   - 成功响应：{ success: true, data: { studioUrl, apiUrl, baseUrl } }
-  - 失败场景：未配置 VOICE_BASE_URL（500）
+  - 失败场景：未配置 VOICE_BASE_URL（500，中文消息："VOICE_BASE_URL 未配置，请检查 api/.env 或 config.ts"）
 - 英文行翻译（批量）
   - 方法与路径：POST /api/voice/translate-lines
   - 请求头：Authorization: Bearer {token}
   - 请求体：{ lines?: string[]; text?: string }
   - 成功响应：{ success: true, data: { sourceLines, translatedLines, txt }, debugId?, debugUrl? }
-  - 失败场景：未提取到英文数组（400）、内部错误（500）
+  - 失败场景：未提取到英文数组（400，中文消息："未从文案结果中提取到 wenan_Array_string"）、内部错误（500）
 - 直接基于英文行生成语音（MP3+SRT）
   - 方法与路径：POST /api/voice/tts-from-lines
   - 请求头：Authorization: Bearer {token}
   - 请求体：{ lines: string[] }
   - 成功响应：{ success: true, data: { lines, txt, tts }, debugId?, debugUrl? }
-  - 失败场景：缺少 lines（400）、内部错误（500）
+  - 失败场景：缺少 lines（400，中文消息："缺少 lines 参数（英文数组）"）、内部错误（500）
 - 调试记录
   - 方法与路径：GET /api/voice/debug 与 GET /api/voice/debug/:id
   - 请求头：Authorization: Bearer {token}
@@ -396,11 +395,11 @@ V-->>FE : "返回 {lines, txt, tts}"
 ```
 
 **图表来源**
-- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
+- [api/src/routes/voice.ts:1-421](file://api/src/routes/voice.ts#L1-L421)
 - [api/src/coze.ts:1-8](file://api/src/coze.ts#L1-L8)
 
 **章节来源**
-- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
+- [api/src/routes/voice.ts:1-421](file://api/src/routes/voice.ts#L1-L421)
 
 ### 复制库接口
 **新增** 复制库模块提供完整的文案库管理功能，支持多维度文案的创建、编辑、删除和查询。该模块基于 JWT 认证，所有操作都需要有效的用户会话。
@@ -409,29 +408,31 @@ V-->>FE : "返回 {lines, txt, tts}"
   - 方法与路径：GET /api/copy-library
   - 请求头：Authorization: Bearer {token}
   - 成功响应：{ success: true, data: CopyLibraryItem[] }
-  - 失败场景：登录失效（401）、数据库查询错误（500）
+  - 失败场景：登录失效（401，中文消息："登录失效"）、数据库查询错误（500，中文消息："Failed to get copy library"）
 - 获取单个复制库详情
   - 方法与路径：GET /api/copy-library/:id
   - 请求头：Authorization: Bearer {token}
   - 成功响应：{ success: true, data: CopyLibraryItem }
-  - 失败场景：复制库不存在（404）、登录失效（401）、数据库查询错误（500）
+  - 失败场景：复制库不存在（404，中文消息："Copy not found"）、登录失效（401，中文消息："登录失效"）、数据库查询错误（500，中文消息："Failed to get copy detail"）
 - 创建复制库
   - 方法与路径：POST /api/copy-library
   - 请求头：Authorization: Bearer {token}, Content-Type: application/json
   - 请求体：CopyLibraryItem（包含所有字段）
   - 成功响应：{ success: true, data: CopyLibraryItem }
-  - 失败场景：缺少必要字段（400）、登录失效（401）、数据库插入错误（500）
+  - 失败场景：缺少必要字段（400，中文消息："缺少必填字段"）、登录失效（401，中文消息："登录失效"）、数据库插入错误（500，中文消息："Failed to create copy"）
 - 更新复制库
   - 方法与路径：PUT /api/copy-library/:id
   - 请求头：Authorization: Bearer {token}, Content-Type: application/json
   - 请求体：CopyLibraryItem（部分字段可选）
   - 成功响应：{ success: true, data: CopyLibraryItem }
-  - 失败场景：复制库不存在（404）、登录失效（401）、数据库更新错误（500）
+  - 失败场景：复制库不存在（404，中文消息："Copy not found"）、登录失效（401，中文消息："登录失效"）、数据库更新错误（500，中文消息："Failed to update copy"）
 - 删除复制库
   - 方法与路径：DELETE /api/copy-library/:id
   - 请求头：Authorization: Bearer {token}
-  - 成功响应：{ success: true, message: "删除成功" }
-  - 失败场景：复制库不存在（404）、登录失效（401）、数据库删除错误（500）
+  - 成功响应：{ success: true, message: "Deleted successfully" }
+  - 失败场景：复制库不存在（404，中文消息："Copy not found"）、登录失效（401，中文消息："登录失效"）、数据库删除错误（500，中文消息："Failed to delete copy"）
+
+**更新** 复制库API接口的认证中间件和用户ID提取方式
 
 复制库数据模型
 - 复制库表 copy_library
@@ -446,7 +447,7 @@ participant CL as "复制库路由"
 participant A as "认证中间件"
 participant DB as "数据库"
 FE->>CL : "POST /api/copy-library"
-CL->>A : "校验 Bearer Token"
+CL->>A : "校验 Bearer Token<br/>用户ID提取：(req as any).user?.userId"
 A-->>CL : "通过"
 CL->>DB : "INSERT INTO copy_library"
 DB-->>CL : "返回新记录"
@@ -626,11 +627,11 @@ COPYPAGE["web/src/pages/CopyLibraryPage.tsx"] --> FE
 - [api/src/routes/auth.ts:1-115](file://api/src/routes/auth.ts#L1-L115)
 - [api/src/routes/runs.ts:1-159](file://api/src/routes/runs.ts#L1-L159)
 - [api/src/routes/files.ts:1-43](file://api/src/routes/files.ts#L1-L43)
-- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
+- [api/src/routes/voice.ts:1-421](file://api/src/routes/voice.ts#L1-L421)
 - [api/src/routes/copyLibrary.ts:1-170](file://api/src/routes/copyLibrary.ts#L1-L170)
 
 ## 结论
-本 API 文档覆盖了认证、工作流、文件、运行（SSE）、语音（翻译/TTS）以及**新增的复制库管理**的完整接口规范。通过明确的请求/响应结构、认证方式与错误处理策略，结合调试与监控建议，可帮助开发者快速集成与稳定运行。**最新更新**集成了 @gradio/client，提供了更强大的语音生成能力，TTS 生成接口现在使用直接文本输入而非文件上传，显著提高了可靠性。**新增**复制库模块提供了完整的文案库管理功能，支持多维度文案的创建、编辑、删除和查询，为后续的混剪等功能奠定了基础。建议在现有分层架构上新增路由与中间件，保持一致的错误与响应格式。
+本 API 文档覆盖了认证、工作流、文件、运行（SSE）、语音（翻译/TTS）以及**新增的复制库管理**的完整接口规范。通过明确的请求/响应结构、认证方式与错误处理策略，结合调试与监控建议，可帮助开发者快速集成与稳定运行。**最新更新**集成了 @gradio/client，提供了更强大的语音生成能力，TTS 生成接口现在使用直接文本输入而非文件上传，显著提高了可靠性。**新增**复制库模块提供了完整的文案库管理功能，支持多维度文案的创建、编辑、删除和查询，为后续的混剪等功能奠定了基础。**更新**认证中间件采用中文错误消息，提升了用户体验。建议在现有分层架构上新增路由与中间件，保持一致的错误与响应格式。
 
 ## 附录
 
@@ -639,6 +640,7 @@ COPYPAGE["web/src/pages/CopyLibraryPage.tsx"] --> FE
 - 令牌有效期：7 天
 - 建议：HTTPS、最小权限原则、定期轮换密钥、审计日志
 - **复制库安全**：所有操作都基于用户 ID 进行过滤，确保数据隔离
+- **更新** 认证中间件：用户ID提取方式从 `req.user.userId` 改为 `(req as any).user?.userId`
 
 **章节来源**
 - [api/src/utils.ts:14-20](file://api/src/utils.ts#L14-L20)
@@ -650,6 +652,7 @@ COPYPAGE["web/src/pages/CopyLibraryPage.tsx"] --> FE
 - SSE 异常：通过 event: error 推送错误消息；若已有有效输出则标记为 SUCCESS 并附加 warning
 - **语音接口异常：** 支持详细的调试记录，包含每个步骤的输入输出与时间戳
 - **复制库接口异常：** 统一的错误处理机制，包含中文错误消息（经过编码转换）
+- **更新** 所有错误消息已更新为中文，提升用户体验
 
 **章节来源**
 - [api/src/routes/runs.ts:124-156](file://api/src/routes/runs.ts#L124-L156)
@@ -698,9 +701,9 @@ COPYPAGE["web/src/pages/CopyLibraryPage.tsx"] --> FE
 - **调试记录包含：** 输入参数、中间步骤、输出结果、错误信息与时间戳
 
 **章节来源**
-- [api/src/routes/voice.ts:243-260](file://api/src/routes/voice.ts#L243-L260)
+- [api/src/routes/voice.ts:283-356](file://api/src/routes/voice.ts#L283-L356)
 - [api/src/routes/voice.ts:262-328](file://api/src/routes/voice.ts#L262-L328)
-- [api/src/routes/voice.ts:330-389](file://api/src/routes/voice.ts#L330-L389)
+- [api/src/routes/voice.ts:330-421](file://api/src/routes/voice.ts#L330-L421)
 
 ### Gradio 语音服务集成
 **新增** 语音接口现集成了 @gradio/client，提供以下功能：
@@ -711,7 +714,7 @@ COPYPAGE["web/src/pages/CopyLibraryPage.tsx"] --> FE
 - 支持多种语音参数配置
 
 **章节来源**
-- [api/src/routes/voice.ts:1-391](file://api/src/routes/voice.ts#L1-L391)
+- [api/src/routes/voice.ts:1-421](file://api/src/routes/voice.ts#L1-L421)
 - [api/src/config.ts:1-19](file://api/src/config.ts#L1-L19)
 
 ### 复制库前端页面
@@ -737,3 +740,22 @@ COPYPAGE["web/src/pages/CopyLibraryPage.tsx"] --> FE
 
 **章节来源**
 - [api/src/db.ts:34-52](file://api/src/db.ts#L34-L52)
+
+### 认证中间件更新详情
+**更新** 认证中间件的关键变更：
+- 用户ID提取方式：从 `req.user.userId` 改为 `(req as any).user?.userId`
+- 错误消息：全部更新为中文，提升用户体验
+- 类型安全性：保持原有的 AuthRequest 接口定义
+
+**章节来源**
+- [api/src/middleware/auth.ts:1-23](file://api/src/middleware/auth.ts#L1-L23)
+
+### 复制库API接口增强
+**更新** 复制库API接口的增强：
+- 认证中间件：使用相同的中文错误消息策略
+- 用户ID提取：采用类型断言方式 `(req as any).user?.userId`
+- 错误处理：统一的中文错误消息格式
+- 数据库操作：完整的CRUD操作，支持多维度文案管理
+
+**章节来源**
+- [api/src/routes/copyLibrary.ts:1-170](file://api/src/routes/copyLibrary.ts#L1-L170)
