@@ -206,3 +206,34 @@ export const deleteCopyLibraryItem = async (id: number) => {
     method: 'DELETE',
   });
 };
+
+// 音频上传 API
+export const uploadAudioFromUrl = async (url: string) => {
+  return apiFetch<{
+    success: boolean;
+    data: {
+      file_id: string;
+      file_url: string;
+      coze_response: unknown;
+    };
+  }>('/api/audio/upload-from-url', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+};
+
+export const batchUploadAudioFromUrls = async (urls: string[]) => {
+  return apiFetch<{
+    success: boolean;
+    data: {
+      results: Array<{ index: number; url: string; file_id: string; file_url: string }>;
+      errors: Array<{ index: number; url: string; error: string }>;
+      total: number;
+      success_count: number;
+      error_count: number;
+    };
+  }>('/api/audio/batch-upload-from-urls', {
+    method: 'POST',
+    body: JSON.stringify({ urls }),
+  });
+};

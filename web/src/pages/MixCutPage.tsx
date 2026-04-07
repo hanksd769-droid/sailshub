@@ -1,7 +1,7 @@
 import { Button, Card, Form, Input, Space, Typography, message, List, Tag, Divider, Select } from 'antd';
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { runWorkflowStream, getCopyLibrary, type CopyLibraryItem } from '../lib/api';
+import { runWorkflowStream, getCopyLibrary, batchUploadAudioFromUrls, type CopyLibraryItem } from '../lib/api';
 
 const MixCutPage = () => {
   const location = useLocation();
@@ -71,14 +71,51 @@ const MixCutPage = () => {
     setResult(null);
 
     try {
+      // 收集需要上传的音频 URL
+      const audioUrls: string[] = [];
+      if (values.koubo_mp3_Array) {
+        const urls = values.koubo_mp3_Array.split('\n').filter((s: string) => s.trim());
+        audioUrls.push(...urls);
+      }
+      if (values.koubo_mp3_hebin) {
+        audioUrls.push(values.koubo_mp3_hebin);
+      }
+
+      // 上传音频到 Coze 获取 file_id
+      let kouboFileIds: string[] = [];
+      let hebinFileId = '';
+
+      if (audioUrls.length > 0) {
+        message.loading(`正在上传 ${audioUrls.length} 个音频文件到 Coze...`, 0);
+        const uploadRes = await batchUploadAudioFromUrls(audioUrls);
+        message.destroy();
+
+        if (uploadRes.data?.results) {
+          // 分离口播音频和合并音频的 file_id
+          const individualCount = values.koubo_mp3_Array?.split('\n').filter((s: string) => s.trim()).length || 0;
+          kouboFileIds = uploadRes.data.results
+            .slice(0, individualCount)
+            .map((r) => r.file_id);
+          if (uploadRes.data.results.length > individualCount) {
+            hebinFileId = uploadRes.data.results[individualCount]?.file_id || '';
+          }
+
+          if (uploadRes.data.error_count > 0) {
+            message.warning(`${uploadRes.data.error_count} 个音频上传失败`);
+          }
+        }
+      }
+
+      setProgress(30);
+
       await runWorkflowStream(
         'product-copy-v2',
         {
           buwei: values.buwei?.split('\n').filter((s: string) => s.trim()),
           changping: values.changping,
           donzuojiexi: values.donzuojiexi?.split('\n').filter((s: string) => s.trim()),
-          koubo_mp3_Array: values.koubo_mp3_Array?.split('\n').filter((s: string) => s.trim()),
-          koubo_mp3_hebin: values.koubo_mp3_hebin,
+          koubo_mp3_Array: kouboFileIds,
+          koubo_mp3_hebin: hebinFileId,
         },
         (data) => {
           setProgress((prev) => Math.min(prev + 10, 95));
