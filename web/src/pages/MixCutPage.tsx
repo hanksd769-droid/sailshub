@@ -47,8 +47,9 @@ const MixCutPage = () => {
           }
         }
       }
-      const mergedTts = data.tts_merged as { data?: { url?: string }[] } | undefined;
-      const kouboHebin = mergedTts?.data?.[0]?.url || '';
+      // tts_merged 的结构是 { txt: string, tts: result }
+      const mergedData = data.tts_merged as { txt?: string; tts?: { data?: { url?: string }[] } } | undefined;
+      const kouboHebin = mergedData?.tts?.data?.[0]?.url || '';
 
       form.setFieldsValue({
         buwei: data.buwei?.join('\n'),
@@ -146,8 +147,9 @@ const MixCutPage = () => {
                         }
                       }
                     }
-                    const mergedTts = item.tts_merged as { data?: { url?: string }[] } | undefined;
-                    const kouboHebin = mergedTts?.data?.[0]?.url || '';
+                    // tts_merged 的结构是 { txt: string, tts: result }
+                    const mergedData = item.tts_merged as { txt?: string; tts?: { data?: { url?: string }[] } } | undefined;
+                    const kouboHebin = mergedData?.tts?.data?.[0]?.url || '';
 
                     form.setFieldsValue({
                       buwei: item.buwei?.join('\n'),
