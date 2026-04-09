@@ -10,7 +10,9 @@ const MixCutPage = () => {
   const [result, setResult] = useState<{
     koubo_mp3_Array?: string[];
     koubo_mp3_hebin?: string;
+    output?: string;
   } | null>(null);
+  const [debugInfo, setDebugInfo] = useState<{ runId?: string; warning?: string } | null>(null);
 
   const [copyLibrary, setCopyLibrary] = useState<CopyLibraryItem[]>([]);
   const [selectedCopyId, setSelectedCopyId] = useState<number | null>(null);
@@ -135,18 +137,34 @@ const MixCutPage = () => {
         (data) => {
           setProgress((prev) => Math.min(prev + 10, 95));
           if (typeof data === 'object' && data !== null) {
-            const d = data as { koubo_mp3_Array?: string[]; koubo_mp3_hebin?: string };
+            const d = data as { 
+              koubo_mp3_Array?: string[]; 
+              koubo_mp3_hebin?: string;
+              content?: string;
+            };
             if (d.koubo_mp3_Array || d.koubo_mp3_hebin) {
               setResult({
                 koubo_mp3_Array: d.koubo_mp3_Array,
                 koubo_mp3_hebin: d.koubo_mp3_hebin,
               });
             }
+            // 解析 content 字段中的 output
+            if (d.content) {
+              try {
+                const parsed = JSON.parse(d.content);
+                if (parsed.output) {
+                  setResult((prev) => ({ ...prev, output: parsed.output }));
+                }
+              } catch {
+                // 解析失败忽略
+              }
+            }
           }
         },
-        () => {
+        (runId?: string, warning?: string) => {
           setProgress(100);
           setLoading(false);
+          setDebugInfo({ runId, warning });
           message.success('混剪生成完成');
         },
         (errMsg: string) => {
@@ -317,45 +335,35 @@ const MixCutPage = () => {
         {result && (
           <Card title="生成结果" className="form-section">
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              {result.koubo_mp3_Array && result.koubo_mp3_Array.length > 0 && (
+              {/* 混剪输出链接 */}
+              {result.output && (
                 <div>
                   <Divider orientation="left">
-                    <Tag color="blue">逐条音频 ({result.koubo_mp3_Array.length}条)</Tag>
+                    <Tag color="purple">混剪草稿链接</Tag>
                   </Divider>
-                  <List
-                    size="small"
-                    bordered
-                    dataSource={result.koubo_mp3_Array}
-                    renderItem={(url, index) => (
-                      <List.Item>
-                        <Space direction="vertical" style={{ width: '100%' }}>
-                          <Typography.Text type="secondary">音频 {index + 1}</Typography.Text>
-                          <Typography.Text copyable style={{ fontSize: 12 }}>
-                            {url}
-                          </Typography.Text>
-                          <audio controls style={{ width: '100%' }}>
-                            <source src={url} type="audio/wav" />
-                            您的浏览器不支持音频播放
-                          </audio>
-                        </Space>
-                      </List.Item>
-                    )}
-                  />
+                  <Typography.Text copyable style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    {result.output}
+                  </Typography.Text>
+                  <Button type="primary" href={result.output} target="_blank">
+                    打开剪映草稿
+                  </Button>
                 </div>
               )}
 
-              {result.koubo_mp3_hebin && (
+              {/* 调试信息 */}
+              {debugInfo?.runId && (
                 <div>
                   <Divider orientation="left">
-                    <Tag color="green">合并音频</Tag>
+                    <Tag color="orange">调试信息</Tag>
                   </Divider>
-                  <Typography.Text copyable style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-                    {result.koubo_mp3_hebin}
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    Run ID: {debugInfo.runId}
                   </Typography.Text>
-                  <audio controls style={{ width: '100%' }}>
-                    <source src={result.koubo_mp3_hebin} type="audio/wav" />
-                    您的浏览器不支持音频播放
-                  </audio>
+                  {debugInfo.warning && (
+                    <Typography.Text type="warning" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                      警告: {debugInfo.warning}
+                    </Typography.Text>
+                  )}
                 </div>
               )}
             </Space>

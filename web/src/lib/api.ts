@@ -59,7 +59,7 @@ export const runWorkflowStream = async (
   moduleKey: string,
   parameters: Record<string, unknown>,
   onMessage: (data: unknown) => void,
-  onDone: () => void,
+  onDone: (runId?: string, warning?: string) => void,
   onError: (message: string) => void
 ) => {
   const token = getToken();
@@ -81,6 +81,8 @@ export const runWorkflowStream = async (
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let lastRunId: string | undefined;
+  let lastWarning: string | undefined;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -92,7 +94,18 @@ export const runWorkflowStream = async (
 
     for (const part of parts) {
       if (part.startsWith('event: done')) {
-        onDone();
+        // 解析 data 行获取 runId 和 warning
+        const dataLine = part.split('\n').find((l) => l.startsWith('data: '));
+        if (dataLine) {
+          try {
+            const data = JSON.parse(dataLine.replace('data: ', ''));
+            lastRunId = data.runId;
+            lastWarning = data.warning;
+          } catch {
+            // 解析失败忽略
+          }
+        }
+        onDone(lastRunId, lastWarning);
         continue;
       }
 
