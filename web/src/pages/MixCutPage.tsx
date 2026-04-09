@@ -141,6 +141,7 @@ const MixCutPage = () => {
               koubo_mp3_Array?: string[]; 
               koubo_mp3_hebin?: string;
               content?: string;
+              data?: { content?: string };
             };
             if (d.koubo_mp3_Array || d.koubo_mp3_hebin) {
               setResult({
@@ -148,10 +149,11 @@ const MixCutPage = () => {
                 koubo_mp3_hebin: d.koubo_mp3_hebin,
               });
             }
-            // 解析 content 字段中的 output
-            if (d.content) {
+            // 解析 content 字段中的 output（优先从 data.data.content 获取）
+            const contentStr = d.data?.content || d.content;
+            if (contentStr) {
               try {
-                const parsed = JSON.parse(d.content);
+                const parsed = JSON.parse(contentStr);
                 if (parsed.output) {
                   setResult((prev) => ({ ...prev, output: parsed.output }));
                 }
