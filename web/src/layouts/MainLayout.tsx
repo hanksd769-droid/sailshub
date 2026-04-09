@@ -44,7 +44,7 @@ const MainLayout = () => {
           <Typography.Title level={4} style={{ margin: 0 }}>
             Coze 工作台
           </Typography.Title>
-          <Typography.Text type="secondary">功能集成 · v2.2.0</Typography.Text>
+          <Typography.Text type="secondary">功能集成 · v2.3.0</Typography.Text>
         </div>
         <Menu mode="inline" selectedKeys={[location.pathname]} items={menuItems} />
       </Sider>
