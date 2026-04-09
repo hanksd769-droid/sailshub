@@ -12,7 +12,7 @@ const MixCutPage = () => {
     koubo_mp3_hebin?: string;
     output?: string;
   } | null>(null);
-  const [debugInfo, setDebugInfo] = useState<{ runId?: string; warning?: string } | null>(null);
+  const [debugInfo, setDebugInfo] = useState<{ runId?: string; warning?: string; debugUrl?: string; debugListUrl?: string } | null>(null);
 
   const [copyLibrary, setCopyLibrary] = useState<CopyLibraryItem[]>([]);
   const [selectedCopyId, setSelectedCopyId] = useState<number | null>(null);
@@ -163,10 +163,10 @@ const MixCutPage = () => {
             }
           }
         },
-        (runId?: string, warning?: string) => {
+        (runId?: string, warning?: string, debugUrl?: string, debugListUrl?: string) => {
           setProgress(100);
           setLoading(false);
-          setDebugInfo({ runId, warning });
+          setDebugInfo({ runId, warning, debugUrl, debugListUrl });
           message.success('混剪生成完成');
         },
         (errMsg: string) => {
@@ -364,6 +364,13 @@ const MixCutPage = () => {
                   {debugInfo.warning && (
                     <Typography.Text type="warning" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
                       警告: {debugInfo.warning}
+                    </Typography.Text>
+                  )}
+                  {debugInfo.debugUrl && (
+                    <Typography.Text style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                      <a href={`${window.location.origin}${debugInfo.debugUrl}`} target="_blank" rel="noopener noreferrer">
+                        查看详情
+                      </a>
                     </Typography.Text>
                   )}
                 </div>

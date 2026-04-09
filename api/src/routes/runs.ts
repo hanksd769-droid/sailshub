@@ -119,7 +119,11 @@ router.post('/:key/run', authRequired, async (req: AuthRequest, res) => {
 
     // 标准 SSE done（前端兼容）
     res.write('event: done\n');
-    res.write(`data: ${JSON.stringify({ runId })}\n\n`);
+    res.write(`data: ${JSON.stringify({ 
+      runId, 
+      debugUrl: `/api/runs/${runId}`,
+      debugListUrl: '/api/runs'
+    })}\n\n`);
     res.end();
   } catch (error) {
     const message = error instanceof Error ? error.message : '运行失败';
@@ -139,7 +143,12 @@ router.post('/:key/run', authRequired, async (req: AuthRequest, res) => {
       ]);
 
       res.write('event: done\n');
-      res.write(`data: ${JSON.stringify({ runId, warning: message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ 
+        runId, 
+        warning: message,
+        debugUrl: `/api/runs/${runId}`,
+        debugListUrl: '/api/runs'
+      })}\n\n`);
       res.end();
       return;
     }

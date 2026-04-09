@@ -59,7 +59,7 @@ export const runWorkflowStream = async (
   moduleKey: string,
   parameters: Record<string, unknown>,
   onMessage: (data: unknown) => void,
-  onDone: (runId?: string, warning?: string) => void,
+  onDone: (runId?: string, warning?: string, debugUrl?: string, debugListUrl?: string) => void,
   onError: (message: string) => void
 ) => {
   const token = getToken();
@@ -83,6 +83,8 @@ export const runWorkflowStream = async (
   let buffer = '';
   let lastRunId: string | undefined;
   let lastWarning: string | undefined;
+  let lastDebugUrl: string | undefined;
+  let lastDebugListUrl: string | undefined;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -101,11 +103,13 @@ export const runWorkflowStream = async (
             const data = JSON.parse(dataLine.replace('data: ', ''));
             lastRunId = data.runId;
             lastWarning = data.warning;
+            lastDebugUrl = data.debugUrl;
+            lastDebugListUrl = data.debugListUrl;
           } catch {
             // 解析失败忽略
           }
         }
-        onDone(lastRunId, lastWarning);
+        onDone(lastRunId, lastWarning, lastDebugUrl, lastDebugListUrl);
         continue;
       }
 
