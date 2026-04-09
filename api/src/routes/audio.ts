@@ -4,6 +4,7 @@ import path from 'path';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { authRequired } from '../middleware/auth';
+import { config } from '../config';
 
 const router = Router();
 
@@ -54,10 +55,11 @@ router.post('/upload-local', authRequired, async (req, res) => {
     });
 
     console.log('Uploading to Coze...');
+    console.log('Token:', config.cozeToken.substring(0, 10) + '...');
     const cozeResponse = await fetch('https://api.coze.cn/v1/files/upload', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer cztei_qsawsE2464f4KCLNMY8aBTLvelSmFlU0iu9dcmwpHnI4R75T3U2UYaqgi4UJ0gSo4`,
+        Authorization: `Bearer ${config.cozeToken}`,
         ...form.getHeaders(),
       },
       body: form as unknown as BodyInit,
@@ -138,7 +140,7 @@ router.post('/batch-upload-local', authRequired, async (req, res) => {
       const cozeResponse = await fetch('https://api.coze.cn/v1/files/upload', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer cztei_qsawsE2464f4KCLNMY8aBTLvelSmFlU0iu9dcmwpHnI4R75T3U2UYaqgi4UJ0gSo4`,
+          Authorization: `Bearer ${config.cozeToken}`,
           ...form.getHeaders(),
         },
         body: form as unknown as BodyInit,
@@ -146,7 +148,8 @@ router.post('/batch-upload-local', authRequired, async (req, res) => {
 
       if (!cozeResponse.ok) {
         const text = await cozeResponse.text();
-        errors.push({ index: i, filePath, error: `上传失败: ${cozeResponse.status}` });
+        console.error(`[${i + 1}] Coze upload failed:`, cozeResponse.status, text);
+        errors.push({ index: i, filePath, error: `上传失败: ${cozeResponse.status} - ${text}` });
         continue;
       }
 
