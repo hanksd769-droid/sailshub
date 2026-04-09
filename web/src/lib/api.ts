@@ -207,8 +207,8 @@ export const deleteCopyLibraryItem = async (id: number) => {
   });
 };
 
-// 音频上传 API
-export const uploadAudioFromUrl = async (url: string) => {
+// 音频上传 API - 从本地路径上传到 Coze
+export const uploadAudioFromLocal = async (filePath: string) => {
   return apiFetch<{
     success: boolean;
     data: {
@@ -216,24 +216,25 @@ export const uploadAudioFromUrl = async (url: string) => {
       file_url: string;
       coze_response: unknown;
     };
-  }>('/api/audio/upload-from-url', {
+  }>('/api/audio/upload-local', {
     method: 'POST',
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ filePath }),
   });
 };
 
-export const batchUploadAudioFromUrls = async (urls: string[]) => {
+// 批量从本地路径上传音频到 Coze
+export const batchUploadAudioFromLocal = async (filePaths: string[]) => {
   return apiFetch<{
     success: boolean;
     data: {
-      results: Array<{ index: number; url: string; file_id: string; file_url: string }>;
-      errors: Array<{ index: number; url: string; error: string }>;
+      results: Array<{ index: number; filePath: string; file_id?: string; file_url?: string }>;
+      errors: Array<{ index: number; filePath: string; error: string }>;
       total: number;
       success_count: number;
       error_count: number;
     };
-  }>('/api/audio/batch-upload-from-urls', {
+  }>('/api/audio/batch-upload-local', {
     method: 'POST',
-    body: JSON.stringify({ urls }),
+    body: JSON.stringify({ filePaths }),
   });
 };

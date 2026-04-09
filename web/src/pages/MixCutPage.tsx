@@ -1,7 +1,7 @@
 import { Button, Card, Form, Input, Space, Typography, message, List, Tag, Divider, Select } from 'antd';
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { runWorkflowStream, getCopyLibrary, batchUploadAudioFromUrls, type CopyLibraryItem } from '../lib/api';
+import { runWorkflowStream, getCopyLibrary, batchUploadAudioFromLocal, type CopyLibraryItem } from '../lib/api';
 
 const MixCutPage = () => {
   const location = useLocation();
@@ -87,7 +87,9 @@ const MixCutPage = () => {
 
       if (audioUrls.length > 0) {
         message.loading(`正在上传 ${audioUrls.length} 个音频文件到 Coze...`, 0);
-        const uploadRes = await batchUploadAudioFromUrls(audioUrls);
+
+        // 后端直接从本地路径读取并上传到 Coze
+        const uploadRes = await batchUploadAudioFromLocal(audioUrls);
         message.destroy();
 
         if (uploadRes.data?.results) {
@@ -95,7 +97,8 @@ const MixCutPage = () => {
           const individualCount = values.koubo_mp3_Array?.split('\n').filter((s: string) => s.trim()).length || 0;
           kouboFileIds = uploadRes.data.results
             .slice(0, individualCount)
-            .map((r) => r.file_id);
+            .map((r) => r.file_id)
+            .filter((id): id is string => Boolean(id));
           if (uploadRes.data.results.length > individualCount) {
             hebinFileId = uploadRes.data.results[individualCount]?.file_id || '';
           }
