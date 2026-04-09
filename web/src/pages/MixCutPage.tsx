@@ -111,14 +111,26 @@ const MixCutPage = () => {
 
       setProgress(30);
 
+      // 将 file_id 包装成 Coze 要求的格式
+      const kouboFileIdObjects = kouboFileIds.map((id) => JSON.stringify({ file_id: id }));
+      const hebinFileIdObject = hebinFileId ? JSON.stringify({ file_id: hebinFileId }) : '';
+
+      console.log('Calling workflow with params:', {
+        buwei: values.buwei?.split('\n').filter((s: string) => s.trim()),
+        changping: values.changping,
+        donzuojiexi: values.donzuojiexi?.split('\n').filter((s: string) => s.trim()),
+        koubo_mp3_Array: kouboFileIdObjects,
+        koubo_mp3_hebin: hebinFileIdObject,
+      });
+
       await runWorkflowStream(
         'product-copy-v2',
         {
           buwei: values.buwei?.split('\n').filter((s: string) => s.trim()),
           changping: values.changping,
           donzuojiexi: values.donzuojiexi?.split('\n').filter((s: string) => s.trim()),
-          koubo_mp3_Array: kouboFileIds,
-          koubo_mp3_hebin: hebinFileId,
+          koubo_mp3_Array: kouboFileIdObjects,
+          koubo_mp3_hebin: hebinFileIdObject,
         },
         (data) => {
           setProgress((prev) => Math.min(prev + 10, 95));
